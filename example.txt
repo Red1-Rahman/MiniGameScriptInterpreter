@@ -1,0 +1,11 @@
+SET score 10
+SAY "Starting the game!"
+MOVE player RIGHT
+MOVE player DOWN
+ADD score 5
+IF score >= 15
+    SAY "Score is high!"
+ENDIF
+SUBTRACT score 3
+SAY "Game Over"
+EXIT
