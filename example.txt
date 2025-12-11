@@ -1,11 +1,54 @@
-SET score 10
+SAY "=== Mini Game Script Demo ==="
+SAY "Setting up the game world..."
+
+SET score 0
+SET level 1
+
+PLACE OBSTACLE 2 2
+PLACE OBSTACLE 3 3
+PLACE OBSTACLE 4 4
+PLACE ITEM 1 5
+PLACE ITEM 5 1
+PLACE ITEM 7 7
+
 SAY "Starting the game!"
+
 MOVE player RIGHT
 MOVE player DOWN
-ADD score 5
-IF score >= 15
-    SAY "Score is high!"
+MOVE player DOWN
+
+SAY "Testing arithmetic expressions..."
+SET x 10
+SET y 5
+SET sum (x + y)
+SET product (x * y)
+SAY "Results calculated!"
+
+ADD score (x + y * 2)
+SAY "Score updated with arithmetic!"
+
+IF score >= 20
+    SAY "High score achieved!"
 ENDIF
-SUBTRACT score 3
-SAY "Game Over"
+
+SAY "Testing loops..."
+SET counter 0
+REPEAT 3
+    SAY "Loop iteration running..."
+    MOVE player RIGHT
+    ADD counter 1
+ENDREPEAT
+
+SAY "Trying to move through obstacle..."
+MOVE player DOWN
+MOVE player DOWN
+
+SAY "Moving to collect items..."
+MOVE player UP
+MOVE player UP
+MOVE player RIGHT
+MOVE player RIGHT
+
+SET finalScore (score + 100)
+SAY "Game Over! Final calculation complete."
 EXIT
