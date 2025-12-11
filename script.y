@@ -44,6 +44,7 @@ void move_player(char *dir);
 void place_object(char *type, int x, int y);
 
 int interactive_mode = 0;
+int exit_interactive = 0;
 FILE *script_file = NULL;
 
 %}
@@ -97,7 +98,13 @@ command:
     | PLACE OBJECT_TYPE NUMBER NUMBER
         { place_object($2, $3, $4); }
     | EXIT
-        { exit(0); }
+        { 
+            if(interactive_mode) {
+                exit_interactive = 1;
+            } else {
+                exit(0);
+            }
+        }
     ;
 
 %%
@@ -236,11 +243,25 @@ int main(int argc, char *argv[]){
         getchar(); // consume newline
         if(choice==1){
             interactive_mode=1;
-            printf("Interactive Mode: Type commands (EXIT to quit)\n");
-            while(1){
+            exit_interactive=0;
+            // Reset game state for new session
+            player_x = 0;
+            player_y = 0;
+            player_score = 0;
+            var_count = 0;
+            init_grid();
+            
+            printf(GREEN "\nInteractive Mode: Type commands (EXIT to quit)\n" RESET);
+            printf("Available commands: MOVE, SAY, SET, ADD, SUBTRACT, IF, REPEAT, PLACE, EXIT\n\n");
+            print_grid();
+            
+            while(!exit_interactive){
                 printf("> ");
                 char line[256];
                 if(!fgets(line,sizeof(line),stdin)) break;
+                // Skip empty lines
+                if(line[0] == '\n') continue;
+                
                 FILE *tmp = fmemopen(line, strlen(line), "r");
                 if(tmp){
                     yyin=tmp;
@@ -248,17 +269,29 @@ int main(int argc, char *argv[]){
                     fclose(tmp);
                 }
             }
+            interactive_mode=0;
+            printf(GREEN "\nExiting interactive mode...\n\n" RESET);
         } else if(choice==2){
+            // Reset game state for new script
+            player_x = 0;
+            player_y = 0;
+            player_score = 0;
+            var_count = 0;
+            init_grid();
+            
             char filename[100];
             printf("Enter script filename: ");
             scanf("%s",filename);
             FILE *f = fopen(filename,"r");
             if(!f){ fprintf(stderr, RED "File not found!\n" RESET); continue; }
+            
+            printf(GREEN "\nRunning script: %s\n\n" RESET, filename);
             yyin=f;
             while(!feof(f)){
                 yyparse();
             }
             fclose(f);
+            printf(GREEN "\nScript execution completed.\n" RESET);
         } else break;
     }
     return 0;

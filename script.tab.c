@@ -114,10 +114,11 @@ void move_player(char *dir);
 void place_object(char *type, int x, int y);
 
 int interactive_mode = 0;
+int exit_interactive = 0;
 FILE *script_file = NULL;
 
 
-#line 121 "script.tab.c"
+#line 122 "script.tab.c"
 
 # ifndef YY_CAST
 #  ifdef __cplusplus
@@ -560,8 +561,8 @@ static const yytype_int8 yytranslate[] =
 /* YYRLINE[YYN] -- Source line where rule number YYN was defined.  */
 static const yytype_int8 yyrline[] =
 {
-       0,    66,    66,    69,    71,    75,    76,    77,    78,    82,
-      83,    84,    85,    86,    87,    89,    97,    99
+       0,    67,    67,    70,    72,    76,    77,    78,    79,    83,
+      84,    85,    86,    87,    88,    90,    98,   100
 };
 #endif
 
@@ -1145,67 +1146,67 @@ yyreduce:
   switch (yyn)
     {
   case 5: /* expr: NUMBER  */
-#line 75 "script.y"
+#line 76 "script.y"
                                     { (yyval.num) = (yyvsp[0].num); }
-#line 1151 "script.tab.c"
+#line 1152 "script.tab.c"
     break;
 
   case 6: /* expr: IDENTIFIER  */
-#line 76 "script.y"
+#line 77 "script.y"
                                     { (yyval.num) = get_var((yyvsp[0].str)); free((yyvsp[0].str)); }
-#line 1157 "script.tab.c"
+#line 1158 "script.tab.c"
     break;
 
   case 7: /* expr: expr ARITHOP expr  */
-#line 77 "script.y"
+#line 78 "script.y"
                                     { (yyval.num) = eval_arith((yyvsp[-2].num), (yyvsp[-1].str), (yyvsp[0].num)); }
-#line 1163 "script.tab.c"
+#line 1164 "script.tab.c"
     break;
 
   case 8: /* expr: '(' expr ')'  */
-#line 78 "script.y"
+#line 79 "script.y"
                                     { (yyval.num) = (yyvsp[-1].num); }
-#line 1169 "script.tab.c"
+#line 1170 "script.tab.c"
     break;
 
   case 9: /* command: MOVE IDENTIFIER DIRECTION  */
-#line 82 "script.y"
+#line 83 "script.y"
                                     { move_player((yyvsp[0].str)); }
-#line 1175 "script.tab.c"
+#line 1176 "script.tab.c"
     break;
 
   case 10: /* command: SAY STRING  */
-#line 83 "script.y"
+#line 84 "script.y"
                                    { printf(GREEN "%s\n" RESET, (yyvsp[0].str)); free((yyvsp[0].str)); }
-#line 1181 "script.tab.c"
+#line 1182 "script.tab.c"
     break;
 
   case 11: /* command: SET IDENTIFIER expr  */
-#line 84 "script.y"
+#line 85 "script.y"
                                    { set_var((yyvsp[-1].str), (yyvsp[0].num)); printf(GREEN "%s set to %d\n" RESET, (yyvsp[-1].str), (yyvsp[0].num)); free((yyvsp[-1].str)); }
-#line 1187 "script.tab.c"
+#line 1188 "script.tab.c"
     break;
 
   case 12: /* command: ADD IDENTIFIER expr  */
-#line 85 "script.y"
+#line 86 "script.y"
                                    { add_var((yyvsp[-1].str), (yyvsp[0].num)); printf(GREEN "%s updated to %d\n" RESET, (yyvsp[-1].str), get_var((yyvsp[-1].str))); free((yyvsp[-1].str)); }
-#line 1193 "script.tab.c"
+#line 1194 "script.tab.c"
     break;
 
   case 13: /* command: SUBTRACT IDENTIFIER expr  */
-#line 86 "script.y"
+#line 87 "script.y"
                                    { subtract_var((yyvsp[-1].str), (yyvsp[0].num)); printf(GREEN "%s updated to %d\n" RESET, (yyvsp[-1].str), get_var((yyvsp[-1].str))); free((yyvsp[-1].str)); }
-#line 1199 "script.tab.c"
+#line 1200 "script.tab.c"
     break;
 
   case 14: /* command: IF IDENTIFIER OPERATOR expr commands ENDIF  */
-#line 88 "script.y"
+#line 89 "script.y"
         { if(eval_expr(get_var((yyvsp[-4].str)), (yyvsp[-3].str), (yyvsp[-2].num))) { /* already executed commands */ } }
-#line 1205 "script.tab.c"
+#line 1206 "script.tab.c"
     break;
 
   case 15: /* command: REPEAT expr commands ENDREPEAT  */
-#line 90 "script.y"
+#line 91 "script.y"
         { 
             // Note: This simple implementation executes loop body once during parsing
             // For proper loop execution, you'd need to store and re-execute the commands
@@ -1213,23 +1214,29 @@ yyreduce:
                 printf(YELLOW "Loop iteration %d\n" RESET, i+1);
             }
         }
-#line 1217 "script.tab.c"
+#line 1218 "script.tab.c"
     break;
 
   case 16: /* command: PLACE OBJECT_TYPE NUMBER NUMBER  */
-#line 98 "script.y"
+#line 99 "script.y"
         { place_object((yyvsp[-2].str), (yyvsp[-1].num), (yyvsp[0].num)); }
-#line 1223 "script.tab.c"
+#line 1224 "script.tab.c"
     break;
 
   case 17: /* command: EXIT  */
-#line 100 "script.y"
-        { exit(0); }
-#line 1229 "script.tab.c"
+#line 101 "script.y"
+        { 
+            if(interactive_mode) {
+                exit_interactive = 1;
+            } else {
+                exit(0);
+            }
+        }
+#line 1236 "script.tab.c"
     break;
 
 
-#line 1233 "script.tab.c"
+#line 1240 "script.tab.c"
 
       default: break;
     }
@@ -1422,7 +1429,7 @@ yyreturnlab:
   return yyresult;
 }
 
-#line 103 "script.y"
+#line 110 "script.y"
 
 
 // ---------------------- Helper Functions ----------------------
@@ -1559,11 +1566,25 @@ int main(int argc, char *argv[]){
         getchar(); // consume newline
         if(choice==1){
             interactive_mode=1;
-            printf("Interactive Mode: Type commands (EXIT to quit)\n");
-            while(1){
+            exit_interactive=0;
+            // Reset game state for new session
+            player_x = 0;
+            player_y = 0;
+            player_score = 0;
+            var_count = 0;
+            init_grid();
+            
+            printf(GREEN "\nInteractive Mode: Type commands (EXIT to quit)\n" RESET);
+            printf("Available commands: MOVE, SAY, SET, ADD, SUBTRACT, IF, REPEAT, PLACE, EXIT\n\n");
+            print_grid();
+            
+            while(!exit_interactive){
                 printf("> ");
                 char line[256];
                 if(!fgets(line,sizeof(line),stdin)) break;
+                // Skip empty lines
+                if(line[0] == '\n') continue;
+                
                 FILE *tmp = fmemopen(line, strlen(line), "r");
                 if(tmp){
                     yyin=tmp;
@@ -1571,17 +1592,29 @@ int main(int argc, char *argv[]){
                     fclose(tmp);
                 }
             }
+            interactive_mode=0;
+            printf(GREEN "\nExiting interactive mode...\n\n" RESET);
         } else if(choice==2){
+            // Reset game state for new script
+            player_x = 0;
+            player_y = 0;
+            player_score = 0;
+            var_count = 0;
+            init_grid();
+            
             char filename[100];
             printf("Enter script filename: ");
             scanf("%s",filename);
             FILE *f = fopen(filename,"r");
             if(!f){ fprintf(stderr, RED "File not found!\n" RESET); continue; }
+            
+            printf(GREEN "\nRunning script: %s\n\n" RESET, filename);
             yyin=f;
             while(!feof(f)){
                 yyparse();
             }
             fclose(f);
+            printf(GREEN "\nScript execution completed.\n" RESET);
         } else break;
     }
     return 0;
