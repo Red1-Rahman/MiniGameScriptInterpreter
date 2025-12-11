@@ -117,8 +117,13 @@ int interactive_mode = 0;
 int exit_interactive = 0;
 FILE *script_file = NULL;
 
+// For storing loop body
+char loop_buffer[4096];
+int in_loop = 0;
+int loop_count = 0;
 
-#line 122 "script.tab.c"
+
+#line 127 "script.tab.c"
 
 # ifndef YY_CAST
 #  ifdef __cplusplus
@@ -561,8 +566,8 @@ static const yytype_int8 yytranslate[] =
 /* YYRLINE[YYN] -- Source line where rule number YYN was defined.  */
 static const yytype_int8 yyrline[] =
 {
-       0,    67,    67,    70,    72,    76,    77,    78,    79,    83,
-      84,    85,    86,    87,    88,    90,    98,   100
+       0,    72,    72,    75,    77,    81,    82,    83,    84,    88,
+      89,    90,    91,    92,    93,    95,   103,   105
 };
 #endif
 
@@ -1146,67 +1151,67 @@ yyreduce:
   switch (yyn)
     {
   case 5: /* expr: NUMBER  */
-#line 76 "script.y"
+#line 81 "script.y"
                                     { (yyval.num) = (yyvsp[0].num); }
-#line 1152 "script.tab.c"
+#line 1157 "script.tab.c"
     break;
 
   case 6: /* expr: IDENTIFIER  */
-#line 77 "script.y"
+#line 82 "script.y"
                                     { (yyval.num) = get_var((yyvsp[0].str)); free((yyvsp[0].str)); }
-#line 1158 "script.tab.c"
+#line 1163 "script.tab.c"
     break;
 
   case 7: /* expr: expr ARITHOP expr  */
-#line 78 "script.y"
+#line 83 "script.y"
                                     { (yyval.num) = eval_arith((yyvsp[-2].num), (yyvsp[-1].str), (yyvsp[0].num)); }
-#line 1164 "script.tab.c"
+#line 1169 "script.tab.c"
     break;
 
   case 8: /* expr: '(' expr ')'  */
-#line 79 "script.y"
+#line 84 "script.y"
                                     { (yyval.num) = (yyvsp[-1].num); }
-#line 1170 "script.tab.c"
+#line 1175 "script.tab.c"
     break;
 
   case 9: /* command: MOVE IDENTIFIER DIRECTION  */
-#line 83 "script.y"
+#line 88 "script.y"
                                     { move_player((yyvsp[0].str)); }
-#line 1176 "script.tab.c"
+#line 1181 "script.tab.c"
     break;
 
   case 10: /* command: SAY STRING  */
-#line 84 "script.y"
+#line 89 "script.y"
                                    { printf(GREEN "%s\n" RESET, (yyvsp[0].str)); free((yyvsp[0].str)); }
-#line 1182 "script.tab.c"
+#line 1187 "script.tab.c"
     break;
 
   case 11: /* command: SET IDENTIFIER expr  */
-#line 85 "script.y"
+#line 90 "script.y"
                                    { set_var((yyvsp[-1].str), (yyvsp[0].num)); printf(GREEN "%s set to %d\n" RESET, (yyvsp[-1].str), (yyvsp[0].num)); free((yyvsp[-1].str)); }
-#line 1188 "script.tab.c"
+#line 1193 "script.tab.c"
     break;
 
   case 12: /* command: ADD IDENTIFIER expr  */
-#line 86 "script.y"
+#line 91 "script.y"
                                    { add_var((yyvsp[-1].str), (yyvsp[0].num)); printf(GREEN "%s updated to %d\n" RESET, (yyvsp[-1].str), get_var((yyvsp[-1].str))); free((yyvsp[-1].str)); }
-#line 1194 "script.tab.c"
+#line 1199 "script.tab.c"
     break;
 
   case 13: /* command: SUBTRACT IDENTIFIER expr  */
-#line 87 "script.y"
+#line 92 "script.y"
                                    { subtract_var((yyvsp[-1].str), (yyvsp[0].num)); printf(GREEN "%s updated to %d\n" RESET, (yyvsp[-1].str), get_var((yyvsp[-1].str))); free((yyvsp[-1].str)); }
-#line 1200 "script.tab.c"
+#line 1205 "script.tab.c"
     break;
 
   case 14: /* command: IF IDENTIFIER OPERATOR expr commands ENDIF  */
-#line 89 "script.y"
+#line 94 "script.y"
         { if(eval_expr(get_var((yyvsp[-4].str)), (yyvsp[-3].str), (yyvsp[-2].num))) { /* already executed commands */ } }
-#line 1206 "script.tab.c"
+#line 1211 "script.tab.c"
     break;
 
   case 15: /* command: REPEAT expr commands ENDREPEAT  */
-#line 91 "script.y"
+#line 96 "script.y"
         { 
             // Note: This simple implementation executes loop body once during parsing
             // For proper loop execution, you'd need to store and re-execute the commands
@@ -1214,17 +1219,17 @@ yyreduce:
                 printf(YELLOW "Loop iteration %d\n" RESET, i+1);
             }
         }
-#line 1218 "script.tab.c"
+#line 1223 "script.tab.c"
     break;
 
   case 16: /* command: PLACE OBJECT_TYPE NUMBER NUMBER  */
-#line 99 "script.y"
+#line 104 "script.y"
         { place_object((yyvsp[-2].str), (yyvsp[-1].num), (yyvsp[0].num)); }
-#line 1224 "script.tab.c"
+#line 1229 "script.tab.c"
     break;
 
   case 17: /* command: EXIT  */
-#line 101 "script.y"
+#line 106 "script.y"
         { 
             if(interactive_mode) {
                 exit_interactive = 1;
@@ -1232,11 +1237,11 @@ yyreduce:
                 exit(0);
             }
         }
-#line 1236 "script.tab.c"
+#line 1241 "script.tab.c"
     break;
 
 
-#line 1240 "script.tab.c"
+#line 1245 "script.tab.c"
 
       default: break;
     }
@@ -1429,7 +1434,7 @@ yyreturnlab:
   return yyresult;
 }
 
-#line 110 "script.y"
+#line 115 "script.y"
 
 
 // ---------------------- Helper Functions ----------------------
@@ -1575,9 +1580,11 @@ int main(int argc, char *argv[]){
             init_grid();
             
             printf(GREEN "\nInteractive Mode: Type commands (EXIT to quit)\n" RESET);
-            printf("Available commands: MOVE, SAY, SET, ADD, SUBTRACT, IF, REPEAT, PLACE, EXIT\n\n");
+            printf("Available commands: MOVE, SAY, SET, ADD, SUBTRACT, IF, REPEAT, PLACE, EXIT\n");
+            printf("For multi-line blocks (REPEAT/IF), type commands until ENDREPEAT/ENDIF\n\n");
             print_grid();
             
+            char buffer[4096];
             while(!exit_interactive){
                 printf("> ");
                 char line[256];
@@ -1585,11 +1592,88 @@ int main(int argc, char *argv[]){
                 // Skip empty lines
                 if(line[0] == '\n') continue;
                 
-                FILE *tmp = fmemopen(line, strlen(line), "r");
-                if(tmp){
-                    yyin=tmp;
-                    yyparse();
-                    fclose(tmp);
+                // Check if this starts a multi-line block
+                int is_repeat = (strstr(line, "REPEAT") != NULL && strstr(line, "ENDREPEAT") == NULL);
+                int is_if = (strstr(line, "IF") != NULL && strstr(line, "ENDIF") == NULL && strstr(line, "ENDIF") == NULL);
+                
+                if(is_repeat || is_if){
+                    // Multi-line mode: accumulate lines until we find the closing keyword
+                    strcpy(buffer, line);
+                    int depth = 1;
+                    char *start_keyword = is_repeat ? "REPEAT" : "IF";
+                    char *end_keyword = is_repeat ? "ENDREPEAT" : "ENDIF";
+                    
+                    while(depth > 0 && !exit_interactive){
+                        printf("... ");
+                        char continuation[256];
+                        if(!fgets(continuation,sizeof(continuation),stdin)) break;
+                        if(continuation[0] == '\n') continue;
+                        
+                        // Check for nested blocks (only count if it's the same type and not the end)
+                        if(is_repeat && strstr(continuation, "REPEAT") != NULL && strstr(continuation, "ENDREPEAT") == NULL) {
+                            depth++;
+                        } else if(is_if && strstr(continuation, "IF") != NULL && strstr(continuation, "ENDIF") == NULL) {
+                            depth++;
+                        }
+                        
+                        // Check for end keyword
+                        if(strstr(continuation, end_keyword) != NULL) {
+                            depth--;
+                        }
+                        
+                        strcat(buffer, continuation);
+                        
+                        if(depth == 0) break;
+                    }
+                    
+                    // Special handling for REPEAT blocks
+                    if(is_repeat){
+                        // Extract the repeat count and body
+                        char *repeat_line = buffer;
+                        int repeat_times = 0;
+                        char body[4096] = "";
+                        
+                        // Parse "REPEAT n"
+                        char *first_newline = strchr(repeat_line, '\n');
+                        if(first_newline){
+                            sscanf(repeat_line, "REPEAT %d", &repeat_times);
+                            
+                            // Extract body (everything between REPEAT line and ENDREPEAT)
+                            char *body_start = first_newline + 1;
+                            char *endrepeat_pos = strstr(body_start, "ENDREPEAT");
+                            if(endrepeat_pos){
+                                int body_len = endrepeat_pos - body_start;
+                                strncpy(body, body_start, body_len);
+                                body[body_len] = '\0';
+                                
+                                // Execute the body repeat_times times
+                                for(int i = 0; i < repeat_times; i++){
+                                    FILE *tmp = fmemopen(body, strlen(body), "r");
+                                    if(tmp){
+                                        yyin=tmp;
+                                        yyparse();
+                                        fclose(tmp);
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        // Parse IF block normally
+                        FILE *tmp = fmemopen(buffer, strlen(buffer), "r");
+                        if(tmp){
+                            yyin=tmp;
+                            yyparse();
+                            fclose(tmp);
+                        }
+                    }
+                } else {
+                    // Single line command
+                    FILE *tmp = fmemopen(line, strlen(line), "r");
+                    if(tmp){
+                        yyin=tmp;
+                        yyparse();
+                        fclose(tmp);
+                    }
                 }
             }
             interactive_mode=0;
