@@ -28,15 +28,6 @@ This project demonstrates core compiler concepts using **Flex**, **Bison**, and 
 
 ---
 
-## 📂 Project Structure
-.
-├── script.l # Flex lexical rules
-├── script.y # Bison grammar & semantic actions
-├── main.c # Runtime & game logic
-├── examples/ # Sample game scripts
-└── README.md
-
----
 
 ## ▶️ Build & Run
 ```bash
