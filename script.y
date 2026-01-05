@@ -30,6 +30,17 @@ int sound_enabled = 1;
 int game_time = 0;
 int enemies_count = 0;
 
+// Interaction rules (PuzzleScript/VGDL-inspired)
+typedef struct {
+    char actor;
+    char target;
+    char action[12]; // BLOCK, DAMAGE, HEAL, SCORE, DELETE, TRANSFORM
+    int arg;         // numeric parameter (e.g., damage/heal/score)
+    char transform_to; // target symbol for TRANSFORM
+} InteractionRule;
+InteractionRule interaction_rules[100];
+int interaction_rule_count = 0;
+
 // Mission generation system (inspired by Dormans' paper)
 typedef struct {
     char type[20];     // "key", "lock", "boss", "treasure", "challenge"
@@ -50,6 +61,39 @@ int player_skill_level = 1;
 int generation_seed = 0;
 int dungeon_complexity = 3;
 char generation_style[20] = "balanced";
+
+// PuzzleScript-inspired rule system
+typedef struct {
+    char pattern[100];     // Input pattern like "[ > Player | Crate ]"
+    char result[100];      // Output pattern like "[ > Player | > Crate ]"
+    int active;
+} Rule;
+
+Rule game_rules[50];
+int rule_count = 0;
+
+// VGDL-inspired object system
+typedef struct {
+    char name[30];
+    char symbol;
+    char behavior[50];     // "movable", "solid", "collectible", etc.
+    int health;
+    int damage;
+    int score_value;
+} GameObject;
+
+GameObject object_types[20];
+int object_type_count = 0;
+
+// Brogue-inspired pathfinding
+int dijkstra_map[MAX_GRID_SIZE][MAX_GRID_SIZE];
+int path_calculated = 0;
+
+// Enhanced flow metrics
+float player_flow = 0.5;  // 0.0 = bored, 1.0 = frustrated
+int consecutive_successes = 0;
+int consecutive_failures = 0;
+float challenge_rating = 1.0;
 
 // Teleport points
 typedef struct {
@@ -103,6 +147,21 @@ void show_mission_status();
 void complete_task(int task_id);
 int find_task_by_name(char *name);
 void procedural_populate(int density, char *type);
+void add_rule(char *pattern, char *result);
+void apply_rules();
+void define_object(char *name, char symbol, char *behavior, int health, int damage, int score);
+void calculate_dijkstra_map(int target_x, int target_y);
+void ai_step();
+void update_flow_metrics(int success);
+void adjust_difficulty_flow();
+void spawn_object(char *type, int x, int y);
+void transform_objects(char *from_type, char *to_type, int radius);
+// Interaction rules + AI
+char object_symbol(const char *type);
+void add_collision_rule(char *actor_type, char *target_type, const char *action, int arg, char *transform_type);
+void apply_player_collision(char target, int x, int y, int *blocked, int *handled);
+void enemy_ai_step();
+void spawn_objects(char *type, int count);
 
 int interactive_mode = 0;
 int exit_interactive = 0;
@@ -120,7 +179,10 @@ int loop_count = 0;
     int num;
 }
 
-%token <str> MOVE SAY SET ADD SUBTRACT IF ENDIF EXIT IDENTIFIER STRING DIRECTION OPERATOR REPEAT ENDREPEAT PLACE OBJECT_TYPE ARITHOP GRIDSIZE HEALTH INVENTORY USE RANDOM SOUND WAIT TELEPORT STATUS ATTACK MISSION GENERATE THEME COMPLETE ADAPT POPULATE
+%token <str> MOVE SAY SET ADD SUBTRACT IF ENDIF EXIT IDENTIFIER STRING DIRECTION OPERATOR REPEAT ENDREPEAT PLACE OBJECT_TYPE ARITHOP GRIDSIZE HEALTH INVENTORY USE RANDOM SOUND WAIT TELEPORT STATUS ATTACK MISSION GENERATE THEME COMPLETE ADAPT POPULATE RULE COLLIDE TRANSFORM
+%token <str> DIFFICULTY
+%token <str> AISTEP SPAWN
+%token <str> BLOCK DAMAGE HEAL SCORETOK DELETETOK
 %token <num> NUMBER
 
 %type <num> expr
@@ -162,11 +224,26 @@ command:
     | TELEPORT IDENTIFIER          { teleport_to($2); free($2); }
     | STATUS                       { show_status(); }
     | ATTACK                       { attack_enemies_nearby(); }
+    | AISTEP                       { enemy_ai_step(); }
+    | SPAWN OBJECT_TYPE expr       { spawn_objects($2, $3); free($2); }
+    | DIFFICULTY expr              { player_skill_level = $2; printf(GREEN "Difficulty set to %d\n" RESET, player_skill_level); }
     | MISSION THEME IDENTIFIER     { strcpy(mission_theme, $3); generate_mission($3, dungeon_complexity); free($3); }
     | GENERATE IDENTIFIER expr     { if(strcmp($2, "dungeon") == 0) generate_dungeon_space($3, generation_style); free($2); }
     | COMPLETE IDENTIFIER          { int task_id = find_task_by_name($2); if(task_id >= 0) complete_task(task_id); free($2); }
     | ADAPT expr                   { adaptive_difficulty = $2; if($2) adapt_difficulty(); printf(GREEN "Adaptive difficulty %s\n" RESET, $2 ? "enabled" : "disabled"); }
     | POPULATE IDENTIFIER expr     { procedural_populate($3, $2); free($2); }
+    | RULE COLLIDE OBJECT_TYPE OBJECT_TYPE BLOCK
+        { add_collision_rule("PLAYER", $3, "BLOCK", 0, NULL); free($3); free($4); }
+    | RULE COLLIDE OBJECT_TYPE OBJECT_TYPE DAMAGE NUMBER
+        { add_collision_rule("PLAYER", $3, "DAMAGE", $6, NULL); free($3); free($4); }
+    | RULE COLLIDE OBJECT_TYPE OBJECT_TYPE HEAL NUMBER
+        { add_collision_rule("PLAYER", $3, "HEAL", $6, NULL); free($3); free($4); }
+    | RULE COLLIDE OBJECT_TYPE OBJECT_TYPE SCORETOK NUMBER
+        { add_collision_rule("PLAYER", $3, "SCORE", $6, NULL); free($3); free($4); }
+    | RULE COLLIDE OBJECT_TYPE OBJECT_TYPE DELETETOK
+        { add_collision_rule("PLAYER", $3, "DELETE", 0, NULL); free($3); free($4); }
+    | RULE COLLIDE OBJECT_TYPE OBJECT_TYPE TRANSFORM OBJECT_TYPE
+        { add_collision_rule("PLAYER", $3, "TRANSFORM", 0, $6); free($3); free($4); free($6); }
     | IF IDENTIFIER OPERATOR expr commands ENDIF
         { if(eval_expr(get_var($2), $3, $4)) { /* already executed commands */ } }
     | REPEAT expr commands ENDREPEAT
@@ -425,31 +502,38 @@ void move_player(char *dir){
     if(strcmp(dir,"RIGHT")==0) new_y = (player_y+1)%GRID_SIZE;
     
     char target = grid[new_x][new_y];
+    int blocked = 0, handled = 0;
+    // Apply interaction rules first (may override defaults)
+    apply_player_collision(target, new_x, new_y, &blocked, &handled);
+    if(blocked){
+        printf(RED "Movement blocked by rule!\n" RESET);
+        return;
+    }
     
     // Check for different object types
-    if(target == '#' || target == '|'){  // Obstacle or Wall
+    if(!handled && (target == '#' || target == '|')){  // Obstacle or Wall
         printf(RED "Can't move! Obstacle in the way!\n" RESET);
         return;
     }
     
-    if(target == 'D'){  // Door
+    if(!handled && target == 'D'){  // Door
         printf(RED "Door is locked! Need a key.\n" RESET);
         return;
     }
     
-    if(target == '*'){  // Item
+    if(!handled && target == '*'){  // Item
         player_score += 10;
         printf(GREEN "Collected item! Score: %d\n" RESET, player_score);
         play_sound();
     }
     
-    if(target == '+'){  // Power-up
+    if(!handled && target == '+'){  // Power-up
         player_score += 25;
         change_health(15);
         printf(GREEN "Power-up collected! Score: %d\n" RESET, player_score);
     }
     
-    if(target == 'E'){  // Enemy
+    if(!handled && target == 'E'){  // Enemy
         change_health(-20);
         printf(RED "Enemy attacked you!\n" RESET);
         if(player_health > 0){
@@ -459,7 +543,7 @@ void move_player(char *dir){
         }
     }
     
-    if(target == 'T'){  // Teleport point
+    if(!handled && target == 'T'){  // Teleport point
         printf(YELLOW "Stepped on teleport point\n" RESET);
     }
     
@@ -481,6 +565,121 @@ void move_player(char *dir){
         printf(YELLOW "Random event: Found a potion!\n" RESET);
         add_to_inventory("potion");
     }
+}
+
+// ---------------------- Interaction Rules & Helpers ----------------------
+
+char object_symbol(const char *type){
+    if(strcmp(type, "PLAYER") == 0) return 'P';
+    if(strcmp(type, "OBSTACLE") == 0) return '#';
+    if(strcmp(type, "ITEM") == 0) return '*';
+    if(strcmp(type, "ENEMY") == 0) return 'E';
+    if(strcmp(type, "POWERUP") == 0) return '+';
+    if(strcmp(type, "WALL") == 0) return '|';
+    if(strcmp(type, "DOOR") == 0) return 'D';
+    if(strcmp(type, "TELEPORT") == 0) return 'T';
+    if(strcmp(type, "BOSS") == 0) return 'B';
+    if(strcmp(type, "MISSION") == 0) return 'M';
+    return '.';
+}
+
+void add_collision_rule(char *actor_type, char *target_type, const char *action, int arg, char *transform_type){
+    if(interaction_rule_count >= 100) return;
+    InteractionRule *r = &interaction_rules[interaction_rule_count++];
+    r->actor = object_symbol(actor_type);
+    r->target = object_symbol(target_type);
+    strncpy(r->action, action, sizeof(r->action)-1);
+    r->action[sizeof(r->action)-1] = '\0';
+    r->arg = arg;
+    r->transform_to = (transform_type ? object_symbol(transform_type) : 0);
+    printf(GREEN "Rule added: %c collides with %c -> %s\n" RESET, r->actor, r->target, r->action);
+}
+
+void apply_player_collision(char target, int x, int y, int *blocked, int *handled){
+    *blocked = 0; *handled = 0;
+    for(int i=0;i<interaction_rule_count;i++){
+        InteractionRule *r = &interaction_rules[i];
+        if(r->actor=='P' && r->target==target){
+            if(strcmp(r->action,"BLOCK")==0){
+                *blocked = 1; *handled = 1; return;
+            } else if(strcmp(r->action,"DAMAGE")==0){
+                change_health(-r->arg); *handled = 1;
+            } else if(strcmp(r->action,"HEAL")==0){
+                change_health(r->arg); *handled = 1;
+            } else if(strcmp(r->action,"SCORE")==0){
+                player_score += r->arg; printf(GREEN "Score +%d -> %d\n" RESET, r->arg, player_score); *handled = 1;
+            } else if(strcmp(r->action,"DELETE")==0){
+                grid[x][y]='.'; *handled = 1;
+            } else if(strcmp(r->action,"TRANSFORM")==0){
+                if(r->transform_to) grid[x][y]=r->transform_to; *handled = 1;
+            }
+            return; // apply only first matching rule
+        }
+    }
+}
+
+// ---------------------- Enemy AI Step (BFS/Dijkstra-inspired) ----------------------
+void enemy_ai_step(){
+    int dist[MAX_GRID_SIZE][MAX_GRID_SIZE];
+    for(int i=0;i<GRID_SIZE;i++) for(int j=0;j<GRID_SIZE;j++) dist[i][j] = -1;
+    // BFS from player
+    int qx[MAX_GRID_SIZE*MAX_GRID_SIZE], qy[MAX_GRID_SIZE*MAX_GRID_SIZE];
+    int head=0, tail=0;
+    qx[tail]=player_x; qy[tail]=player_y; tail++;
+    dist[player_x][player_y]=0;
+    int dx[4]={-1,1,0,0}; int dy[4]={0,0,-1,1};
+    while(head<tail){
+        int x=qx[head], y=qy[head]; head++;
+        for(int k=0;k<4;k++){
+            int nx=x+dx[k], ny=y+dy[k];
+            if(nx<0||ny<0||nx>=GRID_SIZE||ny>=GRID_SIZE) continue;
+            // passable if not a blocking wall/obstacle/door
+            char c = grid[nx][ny];
+            if(c=='#' || c=='|' || c=='D') continue;
+            if(dist[nx][ny]==-1){ dist[nx][ny]=dist[x][y]+1; qx[tail]=nx; qy[tail]=ny; tail++; }
+        }
+    }
+    // Move each enemy one step toward player if possible
+    int moved=0;
+    for(int i=0;i<GRID_SIZE;i++){
+        for(int j=0;j<GRID_SIZE;j++){
+            if(grid[i][j]=='E'){
+                int bestd=dist[i][j], bx=i, by=j;
+                for(int k=0;k<4;k++){
+                    int nx=i+dx[k], ny=j+dy[k];
+                    if(nx<0||ny<0||nx>=GRID_SIZE||ny>=GRID_SIZE) continue;
+                    char c = grid[nx][ny];
+                    if(c=='#' || c=='|' || c=='D' || c=='E') continue;
+                    if(dist[nx][ny]!=-1 && (bestd==-1 || dist[nx][ny]<bestd)){
+                        bestd=dist[nx][ny]; bx=nx; by=ny;
+                    }
+                }
+                if(bx!=i || by!=j){
+                    if(grid[bx][by]=='P'){
+                        change_health(-10);
+                        printf(RED "Enemy hits you!\n" RESET);
+                    } else {
+                        grid[i][j]='.'; grid[bx][by]='E'; moved++;
+                    }
+                }
+            }
+        }
+    }
+    if(moved>0){ print_grid(); }
+}
+
+void spawn_objects(char *type, int count){
+    int placed=0; int attempts=0; int max_attempts = count*4;
+    while(placed<count && attempts<max_attempts){
+        int x = generate_random(0, GRID_SIZE-1);
+        int y = generate_random(0, GRID_SIZE-1);
+        if(grid[x][y]=='.' && (x!=player_x || y!=player_y)){
+            place_object(type, x, y);
+            placed++;
+        }
+        attempts++;
+    }
+    printf(GREEN "Spawned %d %s objects\n" RESET, placed, type);
 }
 
 void place_object(char *type, int x, int y){
@@ -931,4 +1130,188 @@ void procedural_populate(int density, char *type){
     }
     
     printf(GREEN "Placed %d objects (%d attempts)\n" RESET, placed, attempts);
+}
+
+// ---------------------- Advanced Features Inspired by Research ----------------------
+
+// PuzzleScript-style rule system
+void add_rule(char *pattern, char *result){
+    if(rule_count < 50){
+        strcpy(game_rules[rule_count].pattern, pattern);
+        strcpy(game_rules[rule_count].result, result);
+        game_rules[rule_count].active = 1;
+        rule_count++;
+        printf(GREEN "Rule added: %s -> %s\n" RESET, pattern, result);
+    }
+}
+
+void apply_rules(){
+    printf(YELLOW "Applying game rules...\n" RESET);
+    
+    for(int r = 0; r < rule_count; r++){
+        if(!game_rules[r].active) continue;
+        
+        // Simple pattern matching for player-enemy interactions
+        if(strstr(game_rules[r].pattern, "Player") && strstr(game_rules[r].pattern, "Enemy")){
+            // Check adjacent positions
+            int dx[] = {-1, -1, -1, 0, 0, 1, 1, 1};
+            int dy[] = {-1, 0, 1, -1, 1, -1, 0, 1};
+            
+            for(int i = 0; i < 8; i++){
+                int nx = player_x + dx[i];
+                int ny = player_y + dy[i];
+                
+                if(nx >= 0 && nx < GRID_SIZE && ny >= 0 && ny < GRID_SIZE && grid[nx][ny] == 'E'){
+                    if(strstr(game_rules[r].result, "DAMAGE")){
+                        change_health(-10);
+                        printf(RED "Rule: Enemy damages player\n" RESET);
+                    }
+                    if(strstr(game_rules[r].result, "DESTROY")){
+                        grid[nx][ny] = '.';
+                        enemies_count--;
+                        printf(GREEN "Rule: Enemy destroyed\n" RESET);
+                    }
+                }
+            }
+        }
+    }
+}
+
+// Brogue-inspired Dijkstra pathfinding
+void calculate_dijkstra_map(int target_x, int target_y){
+    // Initialize distances
+    for(int i = 0; i < GRID_SIZE; i++){
+        for(int j = 0; j < GRID_SIZE; j++){
+            dijkstra_map[i][j] = 999;
+        }
+    }
+    
+    dijkstra_map[target_x][target_y] = 0;
+    
+    // Flood-fill algorithm
+    int changed = 1;
+    while(changed){
+        changed = 0;
+        for(int x = 0; x < GRID_SIZE; x++){
+            for(int y = 0; y < GRID_SIZE; y++){
+                if(grid[x][y] == '#' || grid[x][y] == '|') continue;
+                
+                int current = dijkstra_map[x][y];
+                int min_neighbor = 999;
+                
+                if(x > 0 && dijkstra_map[x-1][y] < min_neighbor) min_neighbor = dijkstra_map[x-1][y];
+                if(x < GRID_SIZE-1 && dijkstra_map[x+1][y] < min_neighbor) min_neighbor = dijkstra_map[x+1][y];
+                if(y > 0 && dijkstra_map[x][y-1] < min_neighbor) min_neighbor = dijkstra_map[x][y-1];
+                if(y < GRID_SIZE-1 && dijkstra_map[x][y+1] < min_neighbor) min_neighbor = dijkstra_map[x][y+1];
+                
+                if(min_neighbor + 1 < current){
+                    dijkstra_map[x][y] = min_neighbor + 1;
+                    changed = 1;
+                }
+            }
+        }
+    }
+    
+    path_calculated = 1;
+    printf(GREEN "Pathfinding calculated\n" RESET);
+}
+
+void ai_step(){
+    if(!path_calculated) calculate_dijkstra_map(player_x, player_y);
+    
+    printf(YELLOW "AI Step: Moving enemies...\n" RESET);
+    
+    // Move enemies toward player
+    for(int x = 0; x < GRID_SIZE; x++){
+        for(int y = 0; y < GRID_SIZE; y++){
+            if(grid[x][y] == 'E'){
+                int current_dist = dijkstra_map[x][y];
+                int best_x = x, best_y = y, best_dist = current_dist;
+                
+                int dx[] = {-1, 1, 0, 0};
+                int dy[] = {0, 0, -1, 1};
+                
+                for(int i = 0; i < 4; i++){
+                    int nx = x + dx[i], ny = y + dy[i];
+                    if(nx >= 0 && nx < GRID_SIZE && ny >= 0 && ny < GRID_SIZE &&
+                       grid[nx][ny] == '.' && dijkstra_map[nx][ny] < best_dist){
+                        best_x = nx; best_y = ny; best_dist = dijkstra_map[nx][ny];
+                    }
+                }
+                
+                if(best_x != x || best_y != y){
+                    grid[x][y] = '.'; grid[best_x][best_y] = 'E';
+                }
+            }
+        }
+    }
+    
+    print_grid();
+    path_calculated = 0;
+}
+
+void update_flow_metrics(int success){
+    if(success){
+        consecutive_successes++;
+        consecutive_failures = 0;
+        player_flow -= 0.1;
+    } else {
+        consecutive_failures++;
+        consecutive_successes = 0;
+        player_flow += 0.1;
+    }
+    
+    if(player_flow < 0.0) player_flow = 0.0;
+    if(player_flow > 1.0) player_flow = 1.0;
+}
+
+void adjust_difficulty_flow(){
+    printf(YELLOW "Flow: %.2f (0=bored, 1=frustrated)\n" RESET, player_flow);
+    
+    if(player_flow < 0.3){
+        challenge_rating += 0.2;
+        printf(GREEN "Increasing challenge\n" RESET);
+        spawn_object("ENEMY", generate_random(1, GRID_SIZE-2), generate_random(1, GRID_SIZE-2));
+    } else if(player_flow > 0.7){
+        challenge_rating -= 0.1;
+        if(challenge_rating < 0.5) challenge_rating = 0.5;
+        printf(YELLOW "Providing help\n" RESET);
+        spawn_object("POWERUP", generate_random(1, GRID_SIZE-2), generate_random(1, GRID_SIZE-2));
+        change_health(15);
+    }
+}
+
+void spawn_object(char *type, int x, int y){
+    if(x >= 0 && x < GRID_SIZE && y >= 0 && y < GRID_SIZE && 
+       grid[x][y] == '.' && (x != player_x || y != player_y)){
+        
+        if(strcmp(type, "ENEMY") == 0){
+            grid[x][y] = 'E'; enemies_count++;
+        } else if(strcmp(type, "POWERUP") == 0){
+            grid[x][y] = '+';
+        } else {
+            place_object(type, x, y);
+            return;
+        }
+        printf(GREEN "Spawned %s at (%d,%d)\n" RESET, type, x, y);
+    }
+}
+
+void transform_objects(char *from_type, char *to_type, int radius){
+    printf(YELLOW "Transforming %s to %s (radius %d)\n" RESET, from_type, to_type, radius);
+    
+    char from_symbol = (strcmp(from_type, "ENEMY") == 0) ? 'E' : '*';
+    char to_symbol = (strcmp(to_type, "POWERUP") == 0) ? '+' : '*';
+    
+    int transformed = 0;
+    for(int x = 0; x < GRID_SIZE; x++){
+        for(int y = 0; y < GRID_SIZE; y++){
+            int dist = abs(x - player_x) + abs(y - player_y);
+            if(dist <= radius && grid[x][y] == from_symbol){
+                grid[x][y] = to_symbol; transformed++;
+            }
+        }
+    }
+    printf(GREEN "Transformed %d objects\n" RESET, transformed);
+    print_grid();
 }

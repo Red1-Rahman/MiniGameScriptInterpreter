@@ -100,6 +100,17 @@ int sound_enabled = 1;
 int game_time = 0;
 int enemies_count = 0;
 
+// Interaction rules (PuzzleScript/VGDL-inspired)
+typedef struct {
+    char actor;
+    char target;
+    char action[12]; // BLOCK, DAMAGE, HEAL, SCORE, DELETE, TRANSFORM
+    int arg;         // numeric parameter (e.g., damage/heal/score)
+    char transform_to; // target symbol for TRANSFORM
+} InteractionRule;
+InteractionRule interaction_rules[100];
+int interaction_rule_count = 0;
+
 // Mission generation system (inspired by Dormans' paper)
 typedef struct {
     char type[20];     // "key", "lock", "boss", "treasure", "challenge"
@@ -120,6 +131,39 @@ int player_skill_level = 1;
 int generation_seed = 0;
 int dungeon_complexity = 3;
 char generation_style[20] = "balanced";
+
+// PuzzleScript-inspired rule system
+typedef struct {
+    char pattern[100];     // Input pattern like "[ > Player | Crate ]"
+    char result[100];      // Output pattern like "[ > Player | > Crate ]"
+    int active;
+} Rule;
+
+Rule game_rules[50];
+int rule_count = 0;
+
+// VGDL-inspired object system
+typedef struct {
+    char name[30];
+    char symbol;
+    char behavior[50];     // "movable", "solid", "collectible", etc.
+    int health;
+    int damage;
+    int score_value;
+} GameObject;
+
+GameObject object_types[20];
+int object_type_count = 0;
+
+// Brogue-inspired pathfinding
+int dijkstra_map[MAX_GRID_SIZE][MAX_GRID_SIZE];
+int path_calculated = 0;
+
+// Enhanced flow metrics
+float player_flow = 0.5;  // 0.0 = bored, 1.0 = frustrated
+int consecutive_successes = 0;
+int consecutive_failures = 0;
+float challenge_rating = 1.0;
 
 // Teleport points
 typedef struct {
@@ -173,6 +217,21 @@ void show_mission_status();
 void complete_task(int task_id);
 int find_task_by_name(char *name);
 void procedural_populate(int density, char *type);
+void add_rule(char *pattern, char *result);
+void apply_rules();
+void define_object(char *name, char symbol, char *behavior, int health, int damage, int score);
+void calculate_dijkstra_map(int target_x, int target_y);
+void ai_step();
+void update_flow_metrics(int success);
+void adjust_difficulty_flow();
+void spawn_object(char *type, int x, int y);
+void transform_objects(char *from_type, char *to_type, int radius);
+// Interaction rules + AI
+char object_symbol(const char *type);
+void add_collision_rule(char *actor_type, char *target_type, const char *action, int arg, char *transform_type);
+void apply_player_collision(char target, int x, int y, int *blocked, int *handled);
+void enemy_ai_step();
+void spawn_objects(char *type, int count);
 
 int interactive_mode = 0;
 int exit_interactive = 0;
@@ -184,7 +243,7 @@ int in_loop = 0;
 int loop_count = 0;
 
 
-#line 188 "script.tab.c"
+#line 247 "script.tab.c"
 
 # ifndef YY_CAST
 #  ifdef __cplusplus
@@ -248,14 +307,25 @@ enum yysymbol_kind_t
   YYSYMBOL_COMPLETE = 33,                  /* COMPLETE  */
   YYSYMBOL_ADAPT = 34,                     /* ADAPT  */
   YYSYMBOL_POPULATE = 35,                  /* POPULATE  */
-  YYSYMBOL_NUMBER = 36,                    /* NUMBER  */
-  YYSYMBOL_37_ = 37,                       /* '('  */
-  YYSYMBOL_38_ = 38,                       /* ')'  */
-  YYSYMBOL_YYACCEPT = 39,                  /* $accept  */
-  YYSYMBOL_script = 40,                    /* script  */
-  YYSYMBOL_commands = 41,                  /* commands  */
-  YYSYMBOL_expr = 42,                      /* expr  */
-  YYSYMBOL_command = 43                    /* command  */
+  YYSYMBOL_RULE = 36,                      /* RULE  */
+  YYSYMBOL_COLLIDE = 37,                   /* COLLIDE  */
+  YYSYMBOL_TRANSFORM = 38,                 /* TRANSFORM  */
+  YYSYMBOL_DIFFICULTY = 39,                /* DIFFICULTY  */
+  YYSYMBOL_AISTEP = 40,                    /* AISTEP  */
+  YYSYMBOL_SPAWN = 41,                     /* SPAWN  */
+  YYSYMBOL_BLOCK = 42,                     /* BLOCK  */
+  YYSYMBOL_DAMAGE = 43,                    /* DAMAGE  */
+  YYSYMBOL_HEAL = 44,                      /* HEAL  */
+  YYSYMBOL_SCORETOK = 45,                  /* SCORETOK  */
+  YYSYMBOL_DELETETOK = 46,                 /* DELETETOK  */
+  YYSYMBOL_NUMBER = 47,                    /* NUMBER  */
+  YYSYMBOL_48_ = 48,                       /* '('  */
+  YYSYMBOL_49_ = 49,                       /* ')'  */
+  YYSYMBOL_YYACCEPT = 50,                  /* $accept  */
+  YYSYMBOL_script = 51,                    /* script  */
+  YYSYMBOL_commands = 52,                  /* commands  */
+  YYSYMBOL_expr = 53,                      /* expr  */
+  YYSYMBOL_command = 54                    /* command  */
 };
 typedef enum yysymbol_kind_t yysymbol_kind_t;
 
@@ -583,19 +653,19 @@ union yyalloc
 /* YYFINAL -- State number of the termination state.  */
 #define YYFINAL  3
 /* YYLAST -- Last index in YYTABLE.  */
-#define YYLAST   149
+#define YYLAST   183
 
 /* YYNTOKENS -- Number of terminals.  */
-#define YYNTOKENS  39
+#define YYNTOKENS  50
 /* YYNNTS -- Number of nonterminals.  */
 #define YYNNTS  5
 /* YYNRULES -- Number of rules.  */
-#define YYNRULES  33
+#define YYNRULES  42
 /* YYNSTATES -- Number of states.  */
-#define YYNSTATES  76
+#define YYNSTATES  96
 
 /* YYMAXUTOK -- Last valid token kind.  */
-#define YYMAXUTOK   291
+#define YYMAXUTOK   302
 
 
 /* YYTRANSLATE(TOKEN-NUM) -- Symbol number corresponding to TOKEN-NUM
@@ -613,7 +683,7 @@ static const yytype_int8 yytranslate[] =
        2,     2,     2,     2,     2,     2,     2,     2,     2,     2,
        2,     2,     2,     2,     2,     2,     2,     2,     2,     2,
        2,     2,     2,     2,     2,     2,     2,     2,     2,     2,
-      37,    38,     2,     2,     2,     2,     2,     2,     2,     2,
+      48,    49,     2,     2,     2,     2,     2,     2,     2,     2,
        2,     2,     2,     2,     2,     2,     2,     2,     2,     2,
        2,     2,     2,     2,     2,     2,     2,     2,     2,     2,
        2,     2,     2,     2,     2,     2,     2,     2,     2,     2,
@@ -638,17 +708,19 @@ static const yytype_int8 yytranslate[] =
        5,     6,     7,     8,     9,    10,    11,    12,    13,    14,
       15,    16,    17,    18,    19,    20,    21,    22,    23,    24,
       25,    26,    27,    28,    29,    30,    31,    32,    33,    34,
-      35,    36
+      35,    36,    37,    38,    39,    40,    41,    42,    43,    44,
+      45,    46,    47
 };
 
 #if YYDEBUG
 /* YYRLINE[YYN] -- Source line where rule number YYN was defined.  */
-static const yytype_uint8 yyrline[] =
+static const yytype_int16 yyrline[] =
 {
-       0,   133,   133,   136,   138,   142,   143,   144,   145,   149,
-     150,   151,   152,   153,   154,   155,   156,   157,   158,   159,
-     160,   161,   162,   163,   164,   165,   166,   167,   168,   169,
-     170,   172,   180,   182
+       0,   195,   195,   198,   200,   204,   205,   206,   207,   211,
+     212,   213,   214,   215,   216,   217,   218,   219,   220,   221,
+     222,   223,   224,   225,   226,   227,   228,   229,   230,   231,
+     232,   233,   234,   235,   237,   239,   241,   243,   245,   247,
+     249,   257,   259
 };
 #endif
 
@@ -669,8 +741,10 @@ static const char *const yytname[] =
   "DIRECTION", "OPERATOR", "REPEAT", "ENDREPEAT", "PLACE", "OBJECT_TYPE",
   "ARITHOP", "GRIDSIZE", "HEALTH", "INVENTORY", "USE", "RANDOM", "SOUND",
   "WAIT", "TELEPORT", "STATUS", "ATTACK", "MISSION", "GENERATE", "THEME",
-  "COMPLETE", "ADAPT", "POPULATE", "NUMBER", "'('", "')'", "$accept",
-  "script", "commands", "expr", "command", YY_NULLPTR
+  "COMPLETE", "ADAPT", "POPULATE", "RULE", "COLLIDE", "TRANSFORM",
+  "DIFFICULTY", "AISTEP", "SPAWN", "BLOCK", "DAMAGE", "HEAL", "SCORETOK",
+  "DELETETOK", "NUMBER", "'('", "')'", "$accept", "script", "commands",
+  "expr", "command", YY_NULLPTR
 };
 
 static const char *
@@ -680,7 +754,7 @@ yysymbol_name (yysymbol_kind_t yysymbol)
 }
 #endif
 
-#define YYPACT_NINF (-36)
+#define YYPACT_NINF (-41)
 
 #define yypact_value_is_default(Yyn) \
   ((Yyn) == YYPACT_NINF)
@@ -692,16 +766,18 @@ yysymbol_name (yysymbol_kind_t yysymbol)
 
 /* YYPACT[STATE-NUM] -- Index in YYTABLE of the portion describing
    STATE-NUM.  */
-static const yytype_int8 yypact[] =
+static const yytype_int16 yypact[] =
 {
-     -36,     8,   114,   -36,    -2,    -1,     1,     3,     4,     5,
-     -36,    -7,     7,    -7,    -7,     6,    10,    11,    -7,    -7,
-      12,   -36,   -36,     9,    22,    24,    -7,    26,   -36,    25,
-     -36,    -7,    -7,    -7,    28,   -36,   -36,    -7,    21,    23,
-      21,    21,   -36,   -36,    -7,    21,    21,    -7,    32,    -7,
-     -36,    21,    -7,   -36,    21,    21,    21,    -7,   -12,    -7,
-      48,    30,    -9,    -9,   -36,    21,    21,    21,   -36,   -36,
-     -36,   -36,    21,    21,    81,   -36
+     -41,     4,   133,   -41,    -4,    -2,     1,     3,     6,     7,
+     -41,    -3,    -9,    -3,    -3,     9,    10,    14,    -3,    -3,
+      15,   -41,   -41,   -17,    16,    18,    -3,    19,    -6,    -3,
+     -41,    21,   -41,    24,   -41,    -3,    -3,    -3,    20,   -41,
+     -41,    -3,    13,    -5,    13,    13,   -41,   -41,    -3,    13,
+      13,    -3,    30,    -3,   -41,    13,    -3,    31,    13,    -3,
+     -41,    13,    13,    13,    -3,   -16,    -3,    55,     5,     0,
+       0,   -41,    13,    13,    32,    13,    13,   -41,   -41,   -41,
+     -41,    13,    13,   137,    94,    36,   -41,     8,    17,    22,
+     -41,   -41,   -41,   -41,   -41,   -41
 };
 
 /* YYDEFACT[STATE-NUM] -- Default reduction number in state STATE-NUM.
@@ -710,25 +786,27 @@ static const yytype_int8 yypact[] =
 static const yytype_int8 yydefact[] =
 {
        3,     0,     2,     1,     0,     0,     0,     0,     0,     0,
-      33,     0,     0,     0,     0,     0,     0,     0,     0,     0,
-       0,    23,    24,     0,     0,     0,     0,     0,     4,     0,
-      10,     0,     0,     0,     0,     6,     5,     0,     3,     0,
-      14,    15,    16,    17,     0,    19,    20,    22,     0,     0,
-      27,    28,     0,     9,    11,    12,    13,     0,     0,     0,
-       0,     0,     0,     0,    25,    26,    29,     3,     8,     7,
-      31,    32,    18,    21,     0,    30
+      42,     0,     0,     0,     0,     0,     0,     0,     0,     0,
+       0,    23,    24,     0,     0,     0,     0,     0,     0,     0,
+      25,     0,     4,     0,    10,     0,     0,     0,     0,     6,
+       5,     0,     3,     0,    14,    15,    16,    17,     0,    19,
+      20,    22,     0,     0,    30,    31,     0,     0,    27,     0,
+       9,    11,    12,    13,     0,     0,     0,     0,     0,     0,
+       0,    28,    29,    32,     0,    26,     3,     8,     7,    40,
+      41,    18,    21,     0,     0,     0,    33,     0,     0,     0,
+      37,    39,    38,    34,    35,    36
 };
 
 /* YYPGOTO[NTERM-NUM].  */
 static const yytype_int8 yypgoto[] =
 {
-     -36,   -36,   -35,   -13,   -36
+     -41,   -41,   -40,   -13,   -41
 };
 
 /* YYDEFGOTO[NTERM-NUM].  */
 static const yytype_int8 yydefgoto[] =
 {
-       0,     1,     2,    38,    28
+       0,     1,     2,    42,    32
 };
 
 /* YYTABLE[YYPACT[STATE-NUM]] -- What to do in state STATE-NUM.  If
@@ -736,63 +814,74 @@ static const yytype_int8 yydefgoto[] =
    number is the opposite.  If YYTABLE_NINF, syntax error.  */
 static const yytype_int8 yytable[] =
 {
-      40,    41,    35,    60,    35,    45,    46,    59,     3,    29,
-      59,    30,    31,    51,    32,    33,    34,    42,    54,    55,
-      56,    43,    44,    47,    58,    39,    68,    36,    37,    36,
-      37,    62,    74,    49,    63,    50,    65,    52,    53,    66,
-      59,    48,    57,    64,    67,     0,    69,     0,     0,    72,
-      73,     4,     5,     6,     7,     8,     9,     0,    10,    61,
-       0,     0,     0,    11,    70,    12,    71,     0,    13,    14,
-      15,    16,    17,    18,    19,    20,    21,    22,    23,    24,
-       0,    25,    26,    27,     4,     5,     6,     7,     8,     9,
-      75,    10,     0,     0,     0,     0,    11,     0,    12,     0,
-       0,    13,    14,    15,    16,    17,    18,    19,    20,    21,
-      22,    23,    24,     0,    25,    26,    27,     4,     5,     6,
-       7,     8,     9,     0,    10,     0,     0,     0,     0,    11,
+      44,    45,    67,    66,     3,    49,    50,    33,    39,    43,
+      34,    39,    35,    55,    36,    52,    58,    37,    38,    66,
+      46,    47,    61,    62,    63,    48,    51,    53,    65,    54,
+      56,    57,    66,    77,    64,    69,    84,    60,    70,    59,
+      72,    71,    68,    73,    40,    41,    75,    40,    41,    74,
+      83,    76,    80,    78,    92,    93,    81,    82,     4,     5,
+       6,     7,     8,     9,    94,    10,     0,     0,     0,    95,
+      11,    79,    12,     0,     0,    13,    14,    15,    16,    17,
+      18,    19,    20,    21,    22,    23,    24,     0,    25,    26,
+      27,    28,     0,     0,    29,    30,    31,     4,     5,     6,
+       7,     8,     9,    91,    10,     0,     0,     0,     0,    11,
        0,    12,     0,     0,    13,    14,    15,    16,    17,    18,
-      19,    20,    21,    22,    23,    24,     0,    25,    26,    27
+      19,    20,    21,    22,    23,    24,     0,    25,    26,    27,
+      28,     0,     0,    29,    30,    31,     4,     5,     6,     7,
+       8,     9,     0,    10,     0,     0,     0,     0,    11,     0,
+      12,     0,     0,    13,    14,    15,    16,    17,    18,    19,
+      20,    21,    22,    23,    24,     0,    25,    26,    27,    28,
+       0,     0,    29,    30,    31,    85,     0,     0,     0,    86,
+      87,    88,    89,    90
 };
 
 static const yytype_int8 yycheck[] =
 {
-      13,    14,    11,    38,    11,    18,    19,    19,     0,    11,
-      19,    12,    11,    26,    11,    11,    11,    11,    31,    32,
-      33,    11,    11,    11,    37,    18,    38,    36,    37,    36,
-      37,    44,    67,    11,    47,    11,    49,    11,    13,    52,
-      19,    32,    14,    11,    57,    -1,    59,    -1,    -1,    62,
-      63,     3,     4,     5,     6,     7,     8,    -1,    10,    36,
-      -1,    -1,    -1,    15,    16,    17,    36,    -1,    20,    21,
-      22,    23,    24,    25,    26,    27,    28,    29,    30,    31,
-      -1,    33,    34,    35,     3,     4,     5,     6,     7,     8,
-       9,    10,    -1,    -1,    -1,    -1,    15,    -1,    17,    -1,
-      -1,    20,    21,    22,    23,    24,    25,    26,    27,    28,
-      29,    30,    31,    -1,    33,    34,    35,     3,     4,     5,
-       6,     7,     8,    -1,    10,    -1,    -1,    -1,    -1,    15,
+      13,    14,    42,    19,     0,    18,    19,    11,    11,    18,
+      12,    11,    11,    26,    11,    32,    29,    11,    11,    19,
+      11,    11,    35,    36,    37,    11,    11,    11,    41,    11,
+      11,    37,    19,    49,    14,    48,    76,    13,    51,    18,
+      53,    11,    47,    56,    47,    48,    59,    47,    48,    18,
+      18,    64,    47,    66,    18,    47,    69,    70,     3,     4,
+       5,     6,     7,     8,    47,    10,    -1,    -1,    -1,    47,
+      15,    16,    17,    -1,    -1,    20,    21,    22,    23,    24,
+      25,    26,    27,    28,    29,    30,    31,    -1,    33,    34,
+      35,    36,    -1,    -1,    39,    40,    41,     3,     4,     5,
+       6,     7,     8,     9,    10,    -1,    -1,    -1,    -1,    15,
       -1,    17,    -1,    -1,    20,    21,    22,    23,    24,    25,
-      26,    27,    28,    29,    30,    31,    -1,    33,    34,    35
+      26,    27,    28,    29,    30,    31,    -1,    33,    34,    35,
+      36,    -1,    -1,    39,    40,    41,     3,     4,     5,     6,
+       7,     8,    -1,    10,    -1,    -1,    -1,    -1,    15,    -1,
+      17,    -1,    -1,    20,    21,    22,    23,    24,    25,    26,
+      27,    28,    29,    30,    31,    -1,    33,    34,    35,    36,
+      -1,    -1,    39,    40,    41,    38,    -1,    -1,    -1,    42,
+      43,    44,    45,    46
 };
 
 /* YYSTOS[STATE-NUM] -- The symbol kind of the accessing symbol of
    state STATE-NUM.  */
 static const yytype_int8 yystos[] =
 {
-       0,    40,    41,     0,     3,     4,     5,     6,     7,     8,
+       0,    51,    52,     0,     3,     4,     5,     6,     7,     8,
       10,    15,    17,    20,    21,    22,    23,    24,    25,    26,
-      27,    28,    29,    30,    31,    33,    34,    35,    43,    11,
-      12,    11,    11,    11,    11,    11,    36,    37,    42,    18,
-      42,    42,    11,    11,    11,    42,    42,    11,    32,    11,
-      11,    42,    11,    13,    42,    42,    42,    14,    42,    19,
-      41,    36,    42,    42,    11,    42,    42,    42,    38,    42,
-      16,    36,    42,    42,    41,     9
+      27,    28,    29,    30,    31,    33,    34,    35,    36,    39,
+      40,    41,    54,    11,    12,    11,    11,    11,    11,    11,
+      47,    48,    53,    18,    53,    53,    11,    11,    11,    53,
+      53,    11,    32,    11,    11,    53,    11,    37,    53,    18,
+      13,    53,    53,    53,    14,    53,    19,    52,    47,    53,
+      53,    11,    53,    53,    18,    53,    53,    49,    53,    16,
+      47,    53,    53,    18,    52,    38,    42,    43,    44,    45,
+      46,     9,    18,    47,    47,    47
 };
 
 /* YYR1[RULE-NUM] -- Symbol kind of the left-hand side of rule RULE-NUM.  */
 static const yytype_int8 yyr1[] =
 {
-       0,    39,    40,    41,    41,    42,    42,    42,    42,    43,
-      43,    43,    43,    43,    43,    43,    43,    43,    43,    43,
-      43,    43,    43,    43,    43,    43,    43,    43,    43,    43,
-      43,    43,    43,    43
+       0,    50,    51,    52,    52,    53,    53,    53,    53,    54,
+      54,    54,    54,    54,    54,    54,    54,    54,    54,    54,
+      54,    54,    54,    54,    54,    54,    54,    54,    54,    54,
+      54,    54,    54,    54,    54,    54,    54,    54,    54,    54,
+      54,    54,    54
 };
 
 /* YYR2[RULE-NUM] -- Number of symbols on the right-hand side of rule RULE-NUM.  */
@@ -800,8 +889,9 @@ static const yytype_int8 yyr2[] =
 {
        0,     2,     1,     0,     2,     1,     1,     3,     3,     3,
        2,     3,     3,     3,     2,     2,     2,     2,     4,     2,
-       2,     4,     2,     1,     1,     3,     3,     2,     2,     3,
-       6,     4,     4,     1
+       2,     4,     2,     1,     1,     1,     3,     2,     3,     3,
+       2,     2,     3,     5,     6,     6,     6,     5,     6,     6,
+       4,     4,     1
 };
 
 
@@ -1265,163 +1355,217 @@ yyreduce:
   switch (yyn)
     {
   case 5: /* expr: NUMBER  */
-#line 142 "script.y"
+#line 204 "script.y"
                                     { (yyval.num) = (yyvsp[0].num); }
-#line 1271 "script.tab.c"
-    break;
-
-  case 6: /* expr: IDENTIFIER  */
-#line 143 "script.y"
-                                    { (yyval.num) = get_var((yyvsp[0].str)); free((yyvsp[0].str)); }
-#line 1277 "script.tab.c"
-    break;
-
-  case 7: /* expr: expr ARITHOP expr  */
-#line 144 "script.y"
-                                    { (yyval.num) = eval_arith((yyvsp[-2].num), (yyvsp[-1].str), (yyvsp[0].num)); }
-#line 1283 "script.tab.c"
-    break;
-
-  case 8: /* expr: '(' expr ')'  */
-#line 145 "script.y"
-                                    { (yyval.num) = (yyvsp[-1].num); }
-#line 1289 "script.tab.c"
-    break;
-
-  case 9: /* command: MOVE IDENTIFIER DIRECTION  */
-#line 149 "script.y"
-                                    { move_player((yyvsp[0].str)); }
-#line 1295 "script.tab.c"
-    break;
-
-  case 10: /* command: SAY STRING  */
-#line 150 "script.y"
-                                   { printf(GREEN "%s\n" RESET, (yyvsp[0].str)); free((yyvsp[0].str)); }
-#line 1301 "script.tab.c"
-    break;
-
-  case 11: /* command: SET IDENTIFIER expr  */
-#line 151 "script.y"
-                                   { set_var((yyvsp[-1].str), (yyvsp[0].num)); printf(GREEN "%s set to %d\n" RESET, (yyvsp[-1].str), (yyvsp[0].num)); free((yyvsp[-1].str)); }
-#line 1307 "script.tab.c"
-    break;
-
-  case 12: /* command: ADD IDENTIFIER expr  */
-#line 152 "script.y"
-                                   { add_var((yyvsp[-1].str), (yyvsp[0].num)); printf(GREEN "%s updated to %d\n" RESET, (yyvsp[-1].str), get_var((yyvsp[-1].str))); free((yyvsp[-1].str)); }
-#line 1313 "script.tab.c"
-    break;
-
-  case 13: /* command: SUBTRACT IDENTIFIER expr  */
-#line 153 "script.y"
-                                   { subtract_var((yyvsp[-1].str), (yyvsp[0].num)); printf(GREEN "%s updated to %d\n" RESET, (yyvsp[-1].str), get_var((yyvsp[-1].str))); free((yyvsp[-1].str)); }
-#line 1319 "script.tab.c"
-    break;
-
-  case 14: /* command: GRIDSIZE expr  */
-#line 154 "script.y"
-                                   { set_grid_size((yyvsp[0].num)); }
-#line 1325 "script.tab.c"
-    break;
-
-  case 15: /* command: HEALTH expr  */
-#line 155 "script.y"
-                                   { change_health((yyvsp[0].num)); }
-#line 1331 "script.tab.c"
-    break;
-
-  case 16: /* command: INVENTORY IDENTIFIER  */
-#line 156 "script.y"
-                                   { add_to_inventory((yyvsp[0].str)); free((yyvsp[0].str)); }
-#line 1337 "script.tab.c"
-    break;
-
-  case 17: /* command: USE IDENTIFIER  */
-#line 157 "script.y"
-                                   { use_item((yyvsp[0].str)); free((yyvsp[0].str)); }
-#line 1343 "script.tab.c"
-    break;
-
-  case 18: /* command: RANDOM IDENTIFIER expr expr  */
-#line 158 "script.y"
-                                   { set_var((yyvsp[-2].str), generate_random((yyvsp[-1].num), (yyvsp[0].num))); free((yyvsp[-2].str)); }
-#line 1349 "script.tab.c"
-    break;
-
-  case 19: /* command: SOUND expr  */
-#line 159 "script.y"
-                                   { sound_enabled = (yyvsp[0].num); printf(GREEN "Sound %s\n" RESET, (yyvsp[0].num) ? "enabled" : "disabled"); }
-#line 1355 "script.tab.c"
-    break;
-
-  case 20: /* command: WAIT expr  */
-#line 160 "script.y"
-                                   { wait_time((yyvsp[0].num)); }
 #line 1361 "script.tab.c"
     break;
 
-  case 21: /* command: TELEPORT IDENTIFIER expr expr  */
-#line 161 "script.y"
-                                    { create_teleport((yyvsp[-2].str), (yyvsp[-1].num), (yyvsp[0].num)); free((yyvsp[-2].str)); }
+  case 6: /* expr: IDENTIFIER  */
+#line 205 "script.y"
+                                    { (yyval.num) = get_var((yyvsp[0].str)); free((yyvsp[0].str)); }
 #line 1367 "script.tab.c"
     break;
 
-  case 22: /* command: TELEPORT IDENTIFIER  */
-#line 162 "script.y"
-                                   { teleport_to((yyvsp[0].str)); free((yyvsp[0].str)); }
+  case 7: /* expr: expr ARITHOP expr  */
+#line 206 "script.y"
+                                    { (yyval.num) = eval_arith((yyvsp[-2].num), (yyvsp[-1].str), (yyvsp[0].num)); }
 #line 1373 "script.tab.c"
     break;
 
-  case 23: /* command: STATUS  */
-#line 163 "script.y"
-                                   { show_status(); }
+  case 8: /* expr: '(' expr ')'  */
+#line 207 "script.y"
+                                    { (yyval.num) = (yyvsp[-1].num); }
 #line 1379 "script.tab.c"
     break;
 
-  case 24: /* command: ATTACK  */
-#line 164 "script.y"
-                                   { attack_enemies_nearby(); }
+  case 9: /* command: MOVE IDENTIFIER DIRECTION  */
+#line 211 "script.y"
+                                    { move_player((yyvsp[0].str)); }
 #line 1385 "script.tab.c"
     break;
 
-  case 25: /* command: MISSION THEME IDENTIFIER  */
-#line 165 "script.y"
-                                   { strcpy(mission_theme, (yyvsp[0].str)); generate_mission((yyvsp[0].str), dungeon_complexity); free((yyvsp[0].str)); }
+  case 10: /* command: SAY STRING  */
+#line 212 "script.y"
+                                   { printf(GREEN "%s\n" RESET, (yyvsp[0].str)); free((yyvsp[0].str)); }
 #line 1391 "script.tab.c"
     break;
 
-  case 26: /* command: GENERATE IDENTIFIER expr  */
-#line 166 "script.y"
-                                   { if(strcmp((yyvsp[-1].str), "dungeon") == 0) generate_dungeon_space((yyvsp[0].num), generation_style); free((yyvsp[-1].str)); }
+  case 11: /* command: SET IDENTIFIER expr  */
+#line 213 "script.y"
+                                   { set_var((yyvsp[-1].str), (yyvsp[0].num)); printf(GREEN "%s set to %d\n" RESET, (yyvsp[-1].str), (yyvsp[0].num)); free((yyvsp[-1].str)); }
 #line 1397 "script.tab.c"
     break;
 
-  case 27: /* command: COMPLETE IDENTIFIER  */
-#line 167 "script.y"
-                                   { int task_id = find_task_by_name((yyvsp[0].str)); if(task_id >= 0) complete_task(task_id); free((yyvsp[0].str)); }
+  case 12: /* command: ADD IDENTIFIER expr  */
+#line 214 "script.y"
+                                   { add_var((yyvsp[-1].str), (yyvsp[0].num)); printf(GREEN "%s updated to %d\n" RESET, (yyvsp[-1].str), get_var((yyvsp[-1].str))); free((yyvsp[-1].str)); }
 #line 1403 "script.tab.c"
     break;
 
-  case 28: /* command: ADAPT expr  */
-#line 168 "script.y"
-                                   { adaptive_difficulty = (yyvsp[0].num); if((yyvsp[0].num)) adapt_difficulty(); printf(GREEN "Adaptive difficulty %s\n" RESET, (yyvsp[0].num) ? "enabled" : "disabled"); }
+  case 13: /* command: SUBTRACT IDENTIFIER expr  */
+#line 215 "script.y"
+                                   { subtract_var((yyvsp[-1].str), (yyvsp[0].num)); printf(GREEN "%s updated to %d\n" RESET, (yyvsp[-1].str), get_var((yyvsp[-1].str))); free((yyvsp[-1].str)); }
 #line 1409 "script.tab.c"
     break;
 
-  case 29: /* command: POPULATE IDENTIFIER expr  */
-#line 169 "script.y"
-                                   { procedural_populate((yyvsp[0].num), (yyvsp[-1].str)); free((yyvsp[-1].str)); }
+  case 14: /* command: GRIDSIZE expr  */
+#line 216 "script.y"
+                                   { set_grid_size((yyvsp[0].num)); }
 #line 1415 "script.tab.c"
     break;
 
-  case 30: /* command: IF IDENTIFIER OPERATOR expr commands ENDIF  */
-#line 171 "script.y"
-        { if(eval_expr(get_var((yyvsp[-4].str)), (yyvsp[-3].str), (yyvsp[-2].num))) { /* already executed commands */ } }
+  case 15: /* command: HEALTH expr  */
+#line 217 "script.y"
+                                   { change_health((yyvsp[0].num)); }
 #line 1421 "script.tab.c"
     break;
 
-  case 31: /* command: REPEAT expr commands ENDREPEAT  */
-#line 173 "script.y"
+  case 16: /* command: INVENTORY IDENTIFIER  */
+#line 218 "script.y"
+                                   { add_to_inventory((yyvsp[0].str)); free((yyvsp[0].str)); }
+#line 1427 "script.tab.c"
+    break;
+
+  case 17: /* command: USE IDENTIFIER  */
+#line 219 "script.y"
+                                   { use_item((yyvsp[0].str)); free((yyvsp[0].str)); }
+#line 1433 "script.tab.c"
+    break;
+
+  case 18: /* command: RANDOM IDENTIFIER expr expr  */
+#line 220 "script.y"
+                                   { set_var((yyvsp[-2].str), generate_random((yyvsp[-1].num), (yyvsp[0].num))); free((yyvsp[-2].str)); }
+#line 1439 "script.tab.c"
+    break;
+
+  case 19: /* command: SOUND expr  */
+#line 221 "script.y"
+                                   { sound_enabled = (yyvsp[0].num); printf(GREEN "Sound %s\n" RESET, (yyvsp[0].num) ? "enabled" : "disabled"); }
+#line 1445 "script.tab.c"
+    break;
+
+  case 20: /* command: WAIT expr  */
+#line 222 "script.y"
+                                   { wait_time((yyvsp[0].num)); }
+#line 1451 "script.tab.c"
+    break;
+
+  case 21: /* command: TELEPORT IDENTIFIER expr expr  */
+#line 223 "script.y"
+                                    { create_teleport((yyvsp[-2].str), (yyvsp[-1].num), (yyvsp[0].num)); free((yyvsp[-2].str)); }
+#line 1457 "script.tab.c"
+    break;
+
+  case 22: /* command: TELEPORT IDENTIFIER  */
+#line 224 "script.y"
+                                   { teleport_to((yyvsp[0].str)); free((yyvsp[0].str)); }
+#line 1463 "script.tab.c"
+    break;
+
+  case 23: /* command: STATUS  */
+#line 225 "script.y"
+                                   { show_status(); }
+#line 1469 "script.tab.c"
+    break;
+
+  case 24: /* command: ATTACK  */
+#line 226 "script.y"
+                                   { attack_enemies_nearby(); }
+#line 1475 "script.tab.c"
+    break;
+
+  case 25: /* command: AISTEP  */
+#line 227 "script.y"
+                                   { enemy_ai_step(); }
+#line 1481 "script.tab.c"
+    break;
+
+  case 26: /* command: SPAWN OBJECT_TYPE expr  */
+#line 228 "script.y"
+                                   { spawn_objects((yyvsp[-1].str), (yyvsp[0].num)); free((yyvsp[-1].str)); }
+#line 1487 "script.tab.c"
+    break;
+
+  case 27: /* command: DIFFICULTY expr  */
+#line 229 "script.y"
+                                   { player_skill_level = (yyvsp[0].num); printf(GREEN "Difficulty set to %d\n" RESET, player_skill_level); }
+#line 1493 "script.tab.c"
+    break;
+
+  case 28: /* command: MISSION THEME IDENTIFIER  */
+#line 230 "script.y"
+                                   { strcpy(mission_theme, (yyvsp[0].str)); generate_mission((yyvsp[0].str), dungeon_complexity); free((yyvsp[0].str)); }
+#line 1499 "script.tab.c"
+    break;
+
+  case 29: /* command: GENERATE IDENTIFIER expr  */
+#line 231 "script.y"
+                                   { if(strcmp((yyvsp[-1].str), "dungeon") == 0) generate_dungeon_space((yyvsp[0].num), generation_style); free((yyvsp[-1].str)); }
+#line 1505 "script.tab.c"
+    break;
+
+  case 30: /* command: COMPLETE IDENTIFIER  */
+#line 232 "script.y"
+                                   { int task_id = find_task_by_name((yyvsp[0].str)); if(task_id >= 0) complete_task(task_id); free((yyvsp[0].str)); }
+#line 1511 "script.tab.c"
+    break;
+
+  case 31: /* command: ADAPT expr  */
+#line 233 "script.y"
+                                   { adaptive_difficulty = (yyvsp[0].num); if((yyvsp[0].num)) adapt_difficulty(); printf(GREEN "Adaptive difficulty %s\n" RESET, (yyvsp[0].num) ? "enabled" : "disabled"); }
+#line 1517 "script.tab.c"
+    break;
+
+  case 32: /* command: POPULATE IDENTIFIER expr  */
+#line 234 "script.y"
+                                   { procedural_populate((yyvsp[0].num), (yyvsp[-1].str)); free((yyvsp[-1].str)); }
+#line 1523 "script.tab.c"
+    break;
+
+  case 33: /* command: RULE COLLIDE OBJECT_TYPE OBJECT_TYPE BLOCK  */
+#line 236 "script.y"
+        { add_collision_rule("PLAYER", (yyvsp[-2].str), "BLOCK", 0, NULL); free((yyvsp[-2].str)); free((yyvsp[-1].str)); }
+#line 1529 "script.tab.c"
+    break;
+
+  case 34: /* command: RULE COLLIDE OBJECT_TYPE OBJECT_TYPE DAMAGE NUMBER  */
+#line 238 "script.y"
+        { add_collision_rule("PLAYER", (yyvsp[-3].str), "DAMAGE", (yyvsp[0].num), NULL); free((yyvsp[-3].str)); free((yyvsp[-2].str)); }
+#line 1535 "script.tab.c"
+    break;
+
+  case 35: /* command: RULE COLLIDE OBJECT_TYPE OBJECT_TYPE HEAL NUMBER  */
+#line 240 "script.y"
+        { add_collision_rule("PLAYER", (yyvsp[-3].str), "HEAL", (yyvsp[0].num), NULL); free((yyvsp[-3].str)); free((yyvsp[-2].str)); }
+#line 1541 "script.tab.c"
+    break;
+
+  case 36: /* command: RULE COLLIDE OBJECT_TYPE OBJECT_TYPE SCORETOK NUMBER  */
+#line 242 "script.y"
+        { add_collision_rule("PLAYER", (yyvsp[-3].str), "SCORE", (yyvsp[0].num), NULL); free((yyvsp[-3].str)); free((yyvsp[-2].str)); }
+#line 1547 "script.tab.c"
+    break;
+
+  case 37: /* command: RULE COLLIDE OBJECT_TYPE OBJECT_TYPE DELETETOK  */
+#line 244 "script.y"
+        { add_collision_rule("PLAYER", (yyvsp[-2].str), "DELETE", 0, NULL); free((yyvsp[-2].str)); free((yyvsp[-1].str)); }
+#line 1553 "script.tab.c"
+    break;
+
+  case 38: /* command: RULE COLLIDE OBJECT_TYPE OBJECT_TYPE TRANSFORM OBJECT_TYPE  */
+#line 246 "script.y"
+        { add_collision_rule("PLAYER", (yyvsp[-3].str), "TRANSFORM", 0, (yyvsp[0].str)); free((yyvsp[-3].str)); free((yyvsp[-2].str)); free((yyvsp[0].str)); }
+#line 1559 "script.tab.c"
+    break;
+
+  case 39: /* command: IF IDENTIFIER OPERATOR expr commands ENDIF  */
+#line 248 "script.y"
+        { if(eval_expr(get_var((yyvsp[-4].str)), (yyvsp[-3].str), (yyvsp[-2].num))) { /* already executed commands */ } }
+#line 1565 "script.tab.c"
+    break;
+
+  case 40: /* command: REPEAT expr commands ENDREPEAT  */
+#line 250 "script.y"
         { 
             // Note: This simple implementation executes loop body once during parsing
             // For proper loop execution, you'd need to store and re-execute the commands
@@ -1429,17 +1573,17 @@ yyreduce:
                 printf(YELLOW "Loop iteration %d\n" RESET, i+1);
             }
         }
-#line 1433 "script.tab.c"
+#line 1577 "script.tab.c"
     break;
 
-  case 32: /* command: PLACE OBJECT_TYPE NUMBER NUMBER  */
-#line 181 "script.y"
+  case 41: /* command: PLACE OBJECT_TYPE NUMBER NUMBER  */
+#line 258 "script.y"
         { place_object((yyvsp[-2].str), (yyvsp[-1].num), (yyvsp[0].num)); }
-#line 1439 "script.tab.c"
+#line 1583 "script.tab.c"
     break;
 
-  case 33: /* command: EXIT  */
-#line 183 "script.y"
+  case 42: /* command: EXIT  */
+#line 260 "script.y"
         { 
             if(interactive_mode) {
                 exit_interactive = 1;
@@ -1447,11 +1591,11 @@ yyreduce:
                 exit(0);
             }
         }
-#line 1451 "script.tab.c"
+#line 1595 "script.tab.c"
     break;
 
 
-#line 1455 "script.tab.c"
+#line 1599 "script.tab.c"
 
       default: break;
     }
@@ -1644,7 +1788,7 @@ yyreturnlab:
   return yyresult;
 }
 
-#line 192 "script.y"
+#line 269 "script.y"
 
 
 // ---------------------- Enhanced Helper Functions ----------------------
@@ -1881,31 +2025,38 @@ void move_player(char *dir){
     if(strcmp(dir,"RIGHT")==0) new_y = (player_y+1)%GRID_SIZE;
     
     char target = grid[new_x][new_y];
+    int blocked = 0, handled = 0;
+    // Apply interaction rules first (may override defaults)
+    apply_player_collision(target, new_x, new_y, &blocked, &handled);
+    if(blocked){
+        printf(RED "Movement blocked by rule!\n" RESET);
+        return;
+    }
     
     // Check for different object types
-    if(target == '#' || target == '|'){  // Obstacle or Wall
+    if(!handled && (target == '#' || target == '|')){  // Obstacle or Wall
         printf(RED "Can't move! Obstacle in the way!\n" RESET);
         return;
     }
     
-    if(target == 'D'){  // Door
+    if(!handled && target == 'D'){  // Door
         printf(RED "Door is locked! Need a key.\n" RESET);
         return;
     }
     
-    if(target == '*'){  // Item
+    if(!handled && target == '*'){  // Item
         player_score += 10;
         printf(GREEN "Collected item! Score: %d\n" RESET, player_score);
         play_sound();
     }
     
-    if(target == '+'){  // Power-up
+    if(!handled && target == '+'){  // Power-up
         player_score += 25;
         change_health(15);
         printf(GREEN "Power-up collected! Score: %d\n" RESET, player_score);
     }
     
-    if(target == 'E'){  // Enemy
+    if(!handled && target == 'E'){  // Enemy
         change_health(-20);
         printf(RED "Enemy attacked you!\n" RESET);
         if(player_health > 0){
@@ -1915,7 +2066,7 @@ void move_player(char *dir){
         }
     }
     
-    if(target == 'T'){  // Teleport point
+    if(!handled && target == 'T'){  // Teleport point
         printf(YELLOW "Stepped on teleport point\n" RESET);
     }
     
@@ -1937,6 +2088,121 @@ void move_player(char *dir){
         printf(YELLOW "Random event: Found a potion!\n" RESET);
         add_to_inventory("potion");
     }
+}
+
+// ---------------------- Interaction Rules & Helpers ----------------------
+
+char object_symbol(const char *type){
+    if(strcmp(type, "PLAYER") == 0) return 'P';
+    if(strcmp(type, "OBSTACLE") == 0) return '#';
+    if(strcmp(type, "ITEM") == 0) return '*';
+    if(strcmp(type, "ENEMY") == 0) return 'E';
+    if(strcmp(type, "POWERUP") == 0) return '+';
+    if(strcmp(type, "WALL") == 0) return '|';
+    if(strcmp(type, "DOOR") == 0) return 'D';
+    if(strcmp(type, "TELEPORT") == 0) return 'T';
+    if(strcmp(type, "BOSS") == 0) return 'B';
+    if(strcmp(type, "MISSION") == 0) return 'M';
+    return '.';
+}
+
+void add_collision_rule(char *actor_type, char *target_type, const char *action, int arg, char *transform_type){
+    if(interaction_rule_count >= 100) return;
+    InteractionRule *r = &interaction_rules[interaction_rule_count++];
+    r->actor = object_symbol(actor_type);
+    r->target = object_symbol(target_type);
+    strncpy(r->action, action, sizeof(r->action)-1);
+    r->action[sizeof(r->action)-1] = '\0';
+    r->arg = arg;
+    r->transform_to = (transform_type ? object_symbol(transform_type) : 0);
+    printf(GREEN "Rule added: %c collides with %c -> %s\n" RESET, r->actor, r->target, r->action);
+}
+
+void apply_player_collision(char target, int x, int y, int *blocked, int *handled){
+    *blocked = 0; *handled = 0;
+    for(int i=0;i<interaction_rule_count;i++){
+        InteractionRule *r = &interaction_rules[i];
+        if(r->actor=='P' && r->target==target){
+            if(strcmp(r->action,"BLOCK")==0){
+                *blocked = 1; *handled = 1; return;
+            } else if(strcmp(r->action,"DAMAGE")==0){
+                change_health(-r->arg); *handled = 1;
+            } else if(strcmp(r->action,"HEAL")==0){
+                change_health(r->arg); *handled = 1;
+            } else if(strcmp(r->action,"SCORE")==0){
+                player_score += r->arg; printf(GREEN "Score +%d -> %d\n" RESET, r->arg, player_score); *handled = 1;
+            } else if(strcmp(r->action,"DELETE")==0){
+                grid[x][y]='.'; *handled = 1;
+            } else if(strcmp(r->action,"TRANSFORM")==0){
+                if(r->transform_to) grid[x][y]=r->transform_to; *handled = 1;
+            }
+            return; // apply only first matching rule
+        }
+    }
+}
+
+// ---------------------- Enemy AI Step (BFS/Dijkstra-inspired) ----------------------
+void enemy_ai_step(){
+    int dist[MAX_GRID_SIZE][MAX_GRID_SIZE];
+    for(int i=0;i<GRID_SIZE;i++) for(int j=0;j<GRID_SIZE;j++) dist[i][j] = -1;
+    // BFS from player
+    int qx[MAX_GRID_SIZE*MAX_GRID_SIZE], qy[MAX_GRID_SIZE*MAX_GRID_SIZE];
+    int head=0, tail=0;
+    qx[tail]=player_x; qy[tail]=player_y; tail++;
+    dist[player_x][player_y]=0;
+    int dx[4]={-1,1,0,0}; int dy[4]={0,0,-1,1};
+    while(head<tail){
+        int x=qx[head], y=qy[head]; head++;
+        for(int k=0;k<4;k++){
+            int nx=x+dx[k], ny=y+dy[k];
+            if(nx<0||ny<0||nx>=GRID_SIZE||ny>=GRID_SIZE) continue;
+            // passable if not a blocking wall/obstacle/door
+            char c = grid[nx][ny];
+            if(c=='#' || c=='|' || c=='D') continue;
+            if(dist[nx][ny]==-1){ dist[nx][ny]=dist[x][y]+1; qx[tail]=nx; qy[tail]=ny; tail++; }
+        }
+    }
+    // Move each enemy one step toward player if possible
+    int moved=0;
+    for(int i=0;i<GRID_SIZE;i++){
+        for(int j=0;j<GRID_SIZE;j++){
+            if(grid[i][j]=='E'){
+                int bestd=dist[i][j], bx=i, by=j;
+                for(int k=0;k<4;k++){
+                    int nx=i+dx[k], ny=j+dy[k];
+                    if(nx<0||ny<0||nx>=GRID_SIZE||ny>=GRID_SIZE) continue;
+                    char c = grid[nx][ny];
+                    if(c=='#' || c=='|' || c=='D' || c=='E') continue;
+                    if(dist[nx][ny]!=-1 && (bestd==-1 || dist[nx][ny]<bestd)){
+                        bestd=dist[nx][ny]; bx=nx; by=ny;
+                    }
+                }
+                if(bx!=i || by!=j){
+                    if(grid[bx][by]=='P'){
+                        change_health(-10);
+                        printf(RED "Enemy hits you!\n" RESET);
+                    } else {
+                        grid[i][j]='.'; grid[bx][by]='E'; moved++;
+                    }
+                }
+            }
+        }
+    }
+    if(moved>0){ print_grid(); }
+}
+
+void spawn_objects(char *type, int count){
+    int placed=0; int attempts=0; int max_attempts = count*4;
+    while(placed<count && attempts<max_attempts){
+        int x = generate_random(0, GRID_SIZE-1);
+        int y = generate_random(0, GRID_SIZE-1);
+        if(grid[x][y]=='.' && (x!=player_x || y!=player_y)){
+            place_object(type, x, y);
+            placed++;
+        }
+        attempts++;
+    }
+    printf(GREEN "Spawned %d %s objects\n" RESET, placed, type);
 }
 
 void place_object(char *type, int x, int y){
@@ -2387,4 +2653,188 @@ void procedural_populate(int density, char *type){
     }
     
     printf(GREEN "Placed %d objects (%d attempts)\n" RESET, placed, attempts);
+}
+
+// ---------------------- Advanced Features Inspired by Research ----------------------
+
+// PuzzleScript-style rule system
+void add_rule(char *pattern, char *result){
+    if(rule_count < 50){
+        strcpy(game_rules[rule_count].pattern, pattern);
+        strcpy(game_rules[rule_count].result, result);
+        game_rules[rule_count].active = 1;
+        rule_count++;
+        printf(GREEN "Rule added: %s -> %s\n" RESET, pattern, result);
+    }
+}
+
+void apply_rules(){
+    printf(YELLOW "Applying game rules...\n" RESET);
+    
+    for(int r = 0; r < rule_count; r++){
+        if(!game_rules[r].active) continue;
+        
+        // Simple pattern matching for player-enemy interactions
+        if(strstr(game_rules[r].pattern, "Player") && strstr(game_rules[r].pattern, "Enemy")){
+            // Check adjacent positions
+            int dx[] = {-1, -1, -1, 0, 0, 1, 1, 1};
+            int dy[] = {-1, 0, 1, -1, 1, -1, 0, 1};
+            
+            for(int i = 0; i < 8; i++){
+                int nx = player_x + dx[i];
+                int ny = player_y + dy[i];
+                
+                if(nx >= 0 && nx < GRID_SIZE && ny >= 0 && ny < GRID_SIZE && grid[nx][ny] == 'E'){
+                    if(strstr(game_rules[r].result, "DAMAGE")){
+                        change_health(-10);
+                        printf(RED "Rule: Enemy damages player\n" RESET);
+                    }
+                    if(strstr(game_rules[r].result, "DESTROY")){
+                        grid[nx][ny] = '.';
+                        enemies_count--;
+                        printf(GREEN "Rule: Enemy destroyed\n" RESET);
+                    }
+                }
+            }
+        }
+    }
+}
+
+// Brogue-inspired Dijkstra pathfinding
+void calculate_dijkstra_map(int target_x, int target_y){
+    // Initialize distances
+    for(int i = 0; i < GRID_SIZE; i++){
+        for(int j = 0; j < GRID_SIZE; j++){
+            dijkstra_map[i][j] = 999;
+        }
+    }
+    
+    dijkstra_map[target_x][target_y] = 0;
+    
+    // Flood-fill algorithm
+    int changed = 1;
+    while(changed){
+        changed = 0;
+        for(int x = 0; x < GRID_SIZE; x++){
+            for(int y = 0; y < GRID_SIZE; y++){
+                if(grid[x][y] == '#' || grid[x][y] == '|') continue;
+                
+                int current = dijkstra_map[x][y];
+                int min_neighbor = 999;
+                
+                if(x > 0 && dijkstra_map[x-1][y] < min_neighbor) min_neighbor = dijkstra_map[x-1][y];
+                if(x < GRID_SIZE-1 && dijkstra_map[x+1][y] < min_neighbor) min_neighbor = dijkstra_map[x+1][y];
+                if(y > 0 && dijkstra_map[x][y-1] < min_neighbor) min_neighbor = dijkstra_map[x][y-1];
+                if(y < GRID_SIZE-1 && dijkstra_map[x][y+1] < min_neighbor) min_neighbor = dijkstra_map[x][y+1];
+                
+                if(min_neighbor + 1 < current){
+                    dijkstra_map[x][y] = min_neighbor + 1;
+                    changed = 1;
+                }
+            }
+        }
+    }
+    
+    path_calculated = 1;
+    printf(GREEN "Pathfinding calculated\n" RESET);
+}
+
+void ai_step(){
+    if(!path_calculated) calculate_dijkstra_map(player_x, player_y);
+    
+    printf(YELLOW "AI Step: Moving enemies...\n" RESET);
+    
+    // Move enemies toward player
+    for(int x = 0; x < GRID_SIZE; x++){
+        for(int y = 0; y < GRID_SIZE; y++){
+            if(grid[x][y] == 'E'){
+                int current_dist = dijkstra_map[x][y];
+                int best_x = x, best_y = y, best_dist = current_dist;
+                
+                int dx[] = {-1, 1, 0, 0};
+                int dy[] = {0, 0, -1, 1};
+                
+                for(int i = 0; i < 4; i++){
+                    int nx = x + dx[i], ny = y + dy[i];
+                    if(nx >= 0 && nx < GRID_SIZE && ny >= 0 && ny < GRID_SIZE &&
+                       grid[nx][ny] == '.' && dijkstra_map[nx][ny] < best_dist){
+                        best_x = nx; best_y = ny; best_dist = dijkstra_map[nx][ny];
+                    }
+                }
+                
+                if(best_x != x || best_y != y){
+                    grid[x][y] = '.'; grid[best_x][best_y] = 'E';
+                }
+            }
+        }
+    }
+    
+    print_grid();
+    path_calculated = 0;
+}
+
+void update_flow_metrics(int success){
+    if(success){
+        consecutive_successes++;
+        consecutive_failures = 0;
+        player_flow -= 0.1;
+    } else {
+        consecutive_failures++;
+        consecutive_successes = 0;
+        player_flow += 0.1;
+    }
+    
+    if(player_flow < 0.0) player_flow = 0.0;
+    if(player_flow > 1.0) player_flow = 1.0;
+}
+
+void adjust_difficulty_flow(){
+    printf(YELLOW "Flow: %.2f (0=bored, 1=frustrated)\n" RESET, player_flow);
+    
+    if(player_flow < 0.3){
+        challenge_rating += 0.2;
+        printf(GREEN "Increasing challenge\n" RESET);
+        spawn_object("ENEMY", generate_random(1, GRID_SIZE-2), generate_random(1, GRID_SIZE-2));
+    } else if(player_flow > 0.7){
+        challenge_rating -= 0.1;
+        if(challenge_rating < 0.5) challenge_rating = 0.5;
+        printf(YELLOW "Providing help\n" RESET);
+        spawn_object("POWERUP", generate_random(1, GRID_SIZE-2), generate_random(1, GRID_SIZE-2));
+        change_health(15);
+    }
+}
+
+void spawn_object(char *type, int x, int y){
+    if(x >= 0 && x < GRID_SIZE && y >= 0 && y < GRID_SIZE && 
+       grid[x][y] == '.' && (x != player_x || y != player_y)){
+        
+        if(strcmp(type, "ENEMY") == 0){
+            grid[x][y] = 'E'; enemies_count++;
+        } else if(strcmp(type, "POWERUP") == 0){
+            grid[x][y] = '+';
+        } else {
+            place_object(type, x, y);
+            return;
+        }
+        printf(GREEN "Spawned %s at (%d,%d)\n" RESET, type, x, y);
+    }
+}
+
+void transform_objects(char *from_type, char *to_type, int radius){
+    printf(YELLOW "Transforming %s to %s (radius %d)\n" RESET, from_type, to_type, radius);
+    
+    char from_symbol = (strcmp(from_type, "ENEMY") == 0) ? 'E' : '*';
+    char to_symbol = (strcmp(to_type, "POWERUP") == 0) ? '+' : '*';
+    
+    int transformed = 0;
+    for(int x = 0; x < GRID_SIZE; x++){
+        for(int y = 0; y < GRID_SIZE; y++){
+            int dist = abs(x - player_x) + abs(y - player_y);
+            if(dist <= radius && grid[x][y] == from_symbol){
+                grid[x][y] = to_symbol; transformed++;
+            }
+        }
+    }
+    printf(GREEN "Transformed %d objects\n" RESET, transformed);
+    print_grid();
 }

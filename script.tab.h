@@ -87,7 +87,18 @@ extern int yydebug;
     COMPLETE = 288,                /* COMPLETE  */
     ADAPT = 289,                   /* ADAPT  */
     POPULATE = 290,                /* POPULATE  */
-    NUMBER = 291                   /* NUMBER  */
+    RULE = 291,                    /* RULE  */
+    COLLIDE = 292,                 /* COLLIDE  */
+    TRANSFORM = 293,               /* TRANSFORM  */
+    DIFFICULTY = 294,              /* DIFFICULTY  */
+    AISTEP = 295,                  /* AISTEP  */
+    SPAWN = 296,                   /* SPAWN  */
+    BLOCK = 297,                   /* BLOCK  */
+    DAMAGE = 298,                  /* DAMAGE  */
+    HEAL = 299,                    /* HEAL  */
+    SCORETOK = 300,                /* SCORETOK  */
+    DELETETOK = 301,               /* DELETETOK  */
+    NUMBER = 302                   /* NUMBER  */
   };
   typedef enum yytokentype yytoken_kind_t;
 #endif
@@ -96,12 +107,12 @@ extern int yydebug;
 #if ! defined YYSTYPE && ! defined YYSTYPE_IS_DECLARED
 union YYSTYPE
 {
-#line 118 "script.y"
+#line 177 "script.y"
 
     char* str;
     int num;
 
-#line 105 "script.tab.h"
+#line 116 "script.tab.h"
 
 };
 typedef union YYSTYPE YYSTYPE;

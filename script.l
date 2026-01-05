@@ -39,6 +39,17 @@ ARITHOP     "+"|"-"|"*"|"/"|"%"
 "COMPLETE"  { return COMPLETE; }
 "ADAPT"     { return ADAPT; }
 "POPULATE"  { return POPULATE; }
+"RULE"      { return RULE; }
+"COLLIDE"   { return COLLIDE; }
+"TRANSFORM" { return TRANSFORM; }
+"DIFFICULTY" { return DIFFICULTY; }
+"AISTEP"    { return AISTEP; }
+"SPAWN"     { return SPAWN; }
+"BLOCK"     { return BLOCK; }
+"DAMAGE"    { return DAMAGE; }
+"HEAL"      { return HEAL; }
+"SCORE"     { return SCORETOK; }
+"DELETE"    { return DELETETOK; }
 "EXIT"      { return EXIT; }
 "UP"|"DOWN"|"LEFT"|"RIGHT" { yylval.str = strdup(yytext); return DIRECTION; }
 "OBSTACLE"|"ITEM"|"ENEMY"|"POWERUP"|"WALL"|"DOOR" { yylval.str = strdup(yytext); return OBJECT_TYPE; }

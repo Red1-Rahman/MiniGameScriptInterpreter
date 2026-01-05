@@ -7,40 +7,80 @@ SOUND 1
 SET score 0
 SET level 1
 
+SAY "=== ADVANCED FEATURES DEMONSTRATION ==="
+
+SAY "1. Setting up Mission System (Dormans-inspired procedural generation)..."
+MISSION THEME dungeon
+GENERATE dungeon 12
+ADAPT 1
+POPULATE enemies 3
+
+SAY "2. Configuring PuzzleScript-style Interaction Rules..."
+RULE COLLIDE ENEMY PLAYER DAMAGE 15
+RULE COLLIDE POWERUP PLAYER HEAL 20
+RULE COLLIDE ITEM PLAYER SCORETOK 50
+
+SAY "3. Setting adaptive difficulty system..."
+DIFFICULTY 2
+
 SAY "Checking initial player status..."
 STATUS
 
-SAY "Placing obstacles and items..."
+SAY "4. Dynamic object spawning and AI behavior..."
+SPAWN ENEMY 2
+AISTEP
+
+SAY "5. Enhanced movement and combat..."
+MOVE player RIGHT
+MOVE player DOWN
+ATTACK
+
+SAY "6. Testing AI-driven enemy movement..."
+AISTEP
+SAY "Enemy AI step completed!"
+
+SAY "7. Placing obstacles and interactive objects..."
 PLACE OBSTACLE 2 2
 PLACE OBSTACLE 3 3
 PLACE OBSTACLE 4 4
 PLACE ITEM 1 5
 PLACE ITEM 5 1
 PLACE ITEM 7 7
-
-SAY "Adding some enemies and power-ups..."
 PLACE ENEMY 6 6
 PLACE POWERUP 8 3
 PLACE WALL 4 0
 PLACE DOOR 4 1
 
-SAY "Setting up inventory..."
+SAY "8. Advanced inventory and progression system..."
 INVENTORY sword
 INVENTORY potion
 INVENTORY key
 
-SAY "Creating teleport points..."
+SAY "9. Teleportation system for rapid navigation..."
 TELEPORT home 0 0
 TELEPORT treasure_room 9 9
 
-SAY "Starting the adventure!"
+SAY "10. Testing procedural mission generation..."
+COMPLETE task1
+GENERATE mission 3
 
+SAY "=== CORE GAMEPLAY DEMONSTRATION ==="
+
+SAY "11. Advanced movement with collision detection..."
 MOVE player RIGHT
 MOVE player DOWN
 MOVE player DOWN
 
-SAY "Testing combat system..."
+SAY "12. Rule-based interaction system activation..."
 ATTACK
+
+SAY "13. Dynamic difficulty and flow adjustment..."
+ADAPT 1
+
+SAY "14. Multi-step AI and pathfinding..."
+AISTEP
+SPAWN POWERUP 1
+AISTEP
 
 SAY "Collecting a power-up for health boost..."
 MOVE player RIGHT
@@ -107,10 +147,130 @@ SAY "Ouch! Took damage."
 HEALTH 20
 SAY "Healed up!"
 
-SAY "Final status check..."
+SAY "15. Advanced procedural content generation..."
+POPULATE items 2
+GENERATE dungeon 8
+
+SAY "=== RESEARCH-INSPIRED SYSTEMS ==="
+SAY "Features inspired by academic papers on game design:"
+SAY "- Dormans: Mission/Space procedural generation"
+SAY "- PuzzleScript: Rule-based transformation system"  
+SAY "- Brogue: Dijkstra map pathfinding for AI"
+SAY "- Adaptive difficulty: Flow-based challenge adjustment"
+
+SAY "Final status check before conclusion..."
 STATUS
 
 SET finalScore (score + 100)
-SAY "Game Over! Final calculation complete."
-SAY "Thanks for playing the enhanced game!"
+SAY "Game Over! All advanced features demonstrated."
+SAY "Research-inspired Mini Game Script completed successfully!"
+EXIT
+
+SAY "=== Procedural Adventure Demo ==="
+SAY "Inspired by Dormans' research on mission/space generation"
+
+SAY "Setting up dynamic world..."
+GRIDSIZE 15
+SOUND 1
+
+SAY "Initial player status:"
+STATUS
+
+SAY "Creating procedural world layout..."
+POPULATE random 8
+SAY "World populated with random objects!"
+
+SAY "Generating quest structure..."
+SAY "Phase 1: Tutorial and Setup"
+PLACE ITEM 2 2
+TELEPORT tutorial_complete 2 2
+
+SAY "Phase 2: Three-Act Mission Structure"
+SAY "Act 1: Learning phase"
+PLACE POWERUP 5 5
+TELEPORT act1_complete 5 5
+
+SAY "Act 2: Challenge phase" 
+PLACE ENEMY 8 8
+PLACE ENEMY 10 10
+PLACE WALL 9 8
+PLACE WALL 9 9
+PLACE WALL 9 10
+
+SAY "Act 3: Resolution phase"
+PLACE DOOR 12 12
+TELEPORT final_area 13 13
+
+SAY "Adding adaptive elements..."
+INVENTORY sword
+INVENTORY key
+INVENTORY potion
+
+SAY "Beginning procedural adventure!"
+SAY "Navigate to complete tutorial at (2,2)..."
+
+MOVE player RIGHT
+MOVE player RIGHT
+MOVE player DOWN
+MOVE player DOWN
+
+SAY "Tutorial complete! Moving to Act 1..."
+TELEPORT act1_complete
+
+SAY "Act 1 power-up collected! Preparing for challenges..."
+MOVE player RIGHT
+MOVE player RIGHT
+MOVE player RIGHT
+
+SAY "Engaging enemies in Act 2..."
+ATTACK
+USE sword
+HEALTH -10
+SAY "Battle damage taken!"
+
+USE potion
+SAY "Healed for next challenge!"
+
+SAY "Proceeding to final area..."
+USE key
+MOVE player RIGHT
+MOVE player RIGHT
+MOVE player RIGHT
+MOVE player DOWN
+MOVE player DOWN
+MOVE player DOWN
+MOVE player DOWN
+
+TELEPORT final_area
+
+SAY "Testing adaptive difficulty based on performance..."
+RANDOM performance_bonus 50 150
+ADD score performance_bonus
+SAY "Performance bonus applied!"
+
+SAY "Generating final random encounter..."
+RANDOM encounter_type 1 3
+IF encounter_type == 1
+    SAY "Treasure encounter!"
+    INVENTORY treasure
+ENDIF
+
+IF encounter_type == 2
+    SAY "Combat encounter!"
+    ATTACK
+ENDIF
+
+IF encounter_type == 3
+    SAY "Puzzle encounter!"
+    SET puzzle_solved 1
+ENDIF
+
+SAY "Final status after procedural adventure:"
+STATUS
+
+SET mission_score (score + 200)
+SAY "Mission complete! Procedural elements successfully demonstrated."
+SAY "This showcases Dormans' concepts: mission structure, space generation,"
+SAY "adaptive difficulty, and grammar-based content creation."
+
 EXIT

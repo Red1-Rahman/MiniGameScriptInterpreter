@@ -1,0 +1,15 @@
+Acknowledgements
+
+The original concept, design and core implementation of this Mini Game Script project are my own.
+
+During development I drew inspiration from the following works and authors, which helped shape ideas for procedural generation, rule-based interactions, AI/pathfinding, and adaptive difficulty:
+
+- Joris Dormans — "Adventures in Level Design: Generating Missions and Spaces for Action-Adventure Games" (mission/space procedural generation)
+- Stephen Lavelle (Increpare) — PuzzleScript (rule-based puzzle design and transformation systems)
+- Tom Schaul — Video Game Description Language (VGDL) (declarative game description and object definitions)
+- Georgios N. Yannakakis & Julian Togelius — research on adaptive difficulty and player modeling (flow-based difficulty adjustment)
+- Brian Walker — Brogue (Dijkstra-map-inspired pathfinding and roguelike design)
+
+I acknowledge these works for the conceptual inspiration they provided; any code, algorithms or text in this project are my own implementation unless explicitly noted otherwise.
+
+If you would like specific citation details or to include formal bibliographic references, I can add them on request.
