@@ -1,9 +1,16 @@
-SAY "=== Mini Game Script Demo ==="
+SAY "=== Enhanced Mini Game Script Demo ==="
 SAY "Setting up the game world..."
+
+GRIDSIZE 10
+SOUND 1
 
 SET score 0
 SET level 1
 
+SAY "Checking initial player status..."
+STATUS
+
+SAY "Placing obstacles and items..."
 PLACE OBSTACLE 2 2
 PLACE OBSTACLE 3 3
 PLACE OBSTACLE 4 4
@@ -11,11 +18,39 @@ PLACE ITEM 1 5
 PLACE ITEM 5 1
 PLACE ITEM 7 7
 
-SAY "Starting the game!"
+SAY "Adding some enemies and power-ups..."
+PLACE ENEMY 6 6
+PLACE POWERUP 8 3
+PLACE WALL 4 0
+PLACE DOOR 4 1
+
+SAY "Setting up inventory..."
+INVENTORY sword
+INVENTORY potion
+INVENTORY key
+
+SAY "Creating teleport points..."
+TELEPORT home 0 0
+TELEPORT treasure_room 9 9
+
+SAY "Starting the adventure!"
 
 MOVE player RIGHT
 MOVE player DOWN
 MOVE player DOWN
+
+SAY "Testing combat system..."
+ATTACK
+
+SAY "Collecting a power-up for health boost..."
+MOVE player RIGHT
+MOVE player RIGHT
+MOVE player UP
+MOVE player UP
+MOVE player RIGHT
+
+SAY "Using a healing potion..."
+USE potion
 
 SAY "Testing arithmetic expressions..."
 SET x 10
@@ -24,20 +59,33 @@ SET sum (x + y)
 SET product (x * y)
 SAY "Results calculated!"
 
-ADD score (x + y * 2)
-SAY "Score updated with arithmetic!"
+RANDOM bonus_points 10 50
+ADD score (x + y * 2 + bonus_points)
+SAY "Score updated with arithmetic and random bonus!"
 
 IF score >= 20
     SAY "High score achieved!"
+    HEALTH 10
+    SAY "Bonus health reward!"
 ENDIF
 
-SAY "Testing loops..."
+SAY "Testing loops with enhanced movement..."
 SET counter 0
 REPEAT 3
     SAY "Loop iteration running..."
     MOVE player RIGHT
+    ATTACK
     ADD counter 1
 ENDREPEAT
+
+SAY "Unlocking the door with a key..."
+USE key
+MOVE player LEFT
+MOVE player LEFT
+MOVE player LEFT
+MOVE player UP
+MOVE player UP
+MOVE player UP
 
 SAY "Trying to move through obstacle..."
 MOVE player DOWN
@@ -49,6 +97,20 @@ MOVE player UP
 MOVE player RIGHT
 MOVE player RIGHT
 
+SAY "Testing teleportation system..."
+TELEPORT treasure_room
+SAY "Teleported to treasure room!"
+
+SAY "Taking some damage and healing..."
+HEALTH -15
+SAY "Ouch! Took damage."
+HEALTH 20
+SAY "Healed up!"
+
+SAY "Final status check..."
+STATUS
+
 SET finalScore (score + 100)
 SAY "Game Over! Final calculation complete."
+SAY "Thanks for playing the enhanced game!"
 EXIT

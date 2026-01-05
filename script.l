@@ -23,9 +23,25 @@ ARITHOP     "+"|"-"|"*"|"/"|"%"
 "REPEAT"    { return REPEAT; }
 "ENDREPEAT" { return ENDREPEAT; }
 "PLACE"     { return PLACE; }
+"GRIDSIZE"  { return GRIDSIZE; }
+"HEALTH"    { return HEALTH; }
+"INVENTORY" { return INVENTORY; }
+"USE"       { return USE; }
+"RANDOM"    { return RANDOM; }
+"SOUND"     { return SOUND; }
+"WAIT"      { return WAIT; }
+"TELEPORT"  { return TELEPORT; }
+"STATUS"    { return STATUS; }
+"ATTACK"    { return ATTACK; }
+"MISSION"   { return MISSION; }
+"GENERATE"  { return GENERATE; }
+"THEME"     { return THEME; }
+"COMPLETE"  { return COMPLETE; }
+"ADAPT"     { return ADAPT; }
+"POPULATE"  { return POPULATE; }
 "EXIT"      { return EXIT; }
 "UP"|"DOWN"|"LEFT"|"RIGHT" { yylval.str = strdup(yytext); return DIRECTION; }
-"OBSTACLE"|"ITEM" { yylval.str = strdup(yytext); return OBJECT_TYPE; }
+"OBSTACLE"|"ITEM"|"ENEMY"|"POWERUP"|"WALL"|"DOOR" { yylval.str = strdup(yytext); return OBJECT_TYPE; }
 
 {ID}        { yylval.str = strdup(yytext); return IDENTIFIER; }
 {DIGIT}+    { yylval.num = atoi(yytext); return NUMBER; }

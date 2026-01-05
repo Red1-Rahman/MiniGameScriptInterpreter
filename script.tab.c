@@ -72,10 +72,12 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
+#include <time.h>
 
 extern FILE *yyin;
 
-#define GRID_SIZE 10
+#define MAX_GRID_SIZE 100
 
 // ANSI color codes
 #define RED "\x1B[31m"
@@ -83,10 +85,49 @@ extern FILE *yyin;
 #define YELLOW "\x1B[33m"
 #define RESET "\x1B[0m"
 
-// Player position
+// Grid size (dynamic)
+int GRID_SIZE = 10;
+
+// Player position and stats
 int player_x = 0, player_y = 0;
 char player_symbol = 'P';
-char grid[GRID_SIZE][GRID_SIZE];
+char grid[MAX_GRID_SIZE][MAX_GRID_SIZE];
+int player_health = 100;
+int max_health = 100;
+char inventory[10][50];
+int inventory_count = 0;
+int sound_enabled = 1;
+int game_time = 0;
+int enemies_count = 0;
+
+// Mission generation system (inspired by Dormans' paper)
+typedef struct {
+    char type[20];     // "key", "lock", "boss", "treasure", "challenge"
+    char name[50];
+    int x, y;          // spatial location
+    int completed;
+    int required_task; // dependency (-1 if none)
+} Task;
+
+Task mission_tasks[20];
+int task_count = 0;
+int current_mission_step = 0;
+char mission_theme[50] = "adventure";
+int adaptive_difficulty = 1;
+int player_skill_level = 1;
+
+// Procedural generation parameters
+int generation_seed = 0;
+int dungeon_complexity = 3;
+char generation_style[20] = "balanced";
+
+// Teleport points
+typedef struct {
+    char name[20];
+    int x, y;
+} TeleportPoint;
+TeleportPoint teleports[10];
+int teleport_count = 0;
 
 // Variable table
 typedef struct {
@@ -112,6 +153,26 @@ void init_grid();
 void print_grid();
 void move_player(char *dir);
 void place_object(char *type, int x, int y);
+void set_grid_size(int size);
+void change_health(int amount);
+void add_to_inventory(char *item);
+void use_item(char *item);
+int generate_random(int min, int max);
+void play_sound();
+void wait_time(int seconds);
+void create_teleport(char *name, int x, int y);
+void teleport_to(char *name);
+void show_status();
+void attack_enemies_nearby();
+void generate_mission(char *theme, int complexity);
+void generate_dungeon_space(int size, char *style);
+void place_mission_objects();
+void check_mission_progress();
+void adapt_difficulty();
+void show_mission_status();
+void complete_task(int task_id);
+int find_task_by_name(char *name);
+void procedural_populate(int density, char *type);
 
 int interactive_mode = 0;
 int exit_interactive = 0;
@@ -123,7 +184,7 @@ int in_loop = 0;
 int loop_count = 0;
 
 
-#line 127 "script.tab.c"
+#line 188 "script.tab.c"
 
 # ifndef YY_CAST
 #  ifdef __cplusplus
@@ -171,14 +232,30 @@ enum yysymbol_kind_t
   YYSYMBOL_PLACE = 17,                     /* PLACE  */
   YYSYMBOL_OBJECT_TYPE = 18,               /* OBJECT_TYPE  */
   YYSYMBOL_ARITHOP = 19,                   /* ARITHOP  */
-  YYSYMBOL_NUMBER = 20,                    /* NUMBER  */
-  YYSYMBOL_21_ = 21,                       /* '('  */
-  YYSYMBOL_22_ = 22,                       /* ')'  */
-  YYSYMBOL_YYACCEPT = 23,                  /* $accept  */
-  YYSYMBOL_script = 24,                    /* script  */
-  YYSYMBOL_commands = 25,                  /* commands  */
-  YYSYMBOL_expr = 26,                      /* expr  */
-  YYSYMBOL_command = 27                    /* command  */
+  YYSYMBOL_GRIDSIZE = 20,                  /* GRIDSIZE  */
+  YYSYMBOL_HEALTH = 21,                    /* HEALTH  */
+  YYSYMBOL_INVENTORY = 22,                 /* INVENTORY  */
+  YYSYMBOL_USE = 23,                       /* USE  */
+  YYSYMBOL_RANDOM = 24,                    /* RANDOM  */
+  YYSYMBOL_SOUND = 25,                     /* SOUND  */
+  YYSYMBOL_WAIT = 26,                      /* WAIT  */
+  YYSYMBOL_TELEPORT = 27,                  /* TELEPORT  */
+  YYSYMBOL_STATUS = 28,                    /* STATUS  */
+  YYSYMBOL_ATTACK = 29,                    /* ATTACK  */
+  YYSYMBOL_MISSION = 30,                   /* MISSION  */
+  YYSYMBOL_GENERATE = 31,                  /* GENERATE  */
+  YYSYMBOL_THEME = 32,                     /* THEME  */
+  YYSYMBOL_COMPLETE = 33,                  /* COMPLETE  */
+  YYSYMBOL_ADAPT = 34,                     /* ADAPT  */
+  YYSYMBOL_POPULATE = 35,                  /* POPULATE  */
+  YYSYMBOL_NUMBER = 36,                    /* NUMBER  */
+  YYSYMBOL_37_ = 37,                       /* '('  */
+  YYSYMBOL_38_ = 38,                       /* ')'  */
+  YYSYMBOL_YYACCEPT = 39,                  /* $accept  */
+  YYSYMBOL_script = 40,                    /* script  */
+  YYSYMBOL_commands = 41,                  /* commands  */
+  YYSYMBOL_expr = 42,                      /* expr  */
+  YYSYMBOL_command = 43                    /* command  */
 };
 typedef enum yysymbol_kind_t yysymbol_kind_t;
 
@@ -506,19 +583,19 @@ union yyalloc
 /* YYFINAL -- State number of the termination state.  */
 #define YYFINAL  3
 /* YYLAST -- Last index in YYTABLE.  */
-#define YYLAST   57
+#define YYLAST   149
 
 /* YYNTOKENS -- Number of terminals.  */
-#define YYNTOKENS  23
+#define YYNTOKENS  39
 /* YYNNTS -- Number of nonterminals.  */
 #define YYNNTS  5
 /* YYNRULES -- Number of rules.  */
-#define YYNRULES  17
+#define YYNRULES  33
 /* YYNSTATES -- Number of states.  */
-#define YYNSTATES  41
+#define YYNSTATES  76
 
 /* YYMAXUTOK -- Last valid token kind.  */
-#define YYMAXUTOK   275
+#define YYMAXUTOK   291
 
 
 /* YYTRANSLATE(TOKEN-NUM) -- Symbol number corresponding to TOKEN-NUM
@@ -536,7 +613,7 @@ static const yytype_int8 yytranslate[] =
        2,     2,     2,     2,     2,     2,     2,     2,     2,     2,
        2,     2,     2,     2,     2,     2,     2,     2,     2,     2,
        2,     2,     2,     2,     2,     2,     2,     2,     2,     2,
-      21,    22,     2,     2,     2,     2,     2,     2,     2,     2,
+      37,    38,     2,     2,     2,     2,     2,     2,     2,     2,
        2,     2,     2,     2,     2,     2,     2,     2,     2,     2,
        2,     2,     2,     2,     2,     2,     2,     2,     2,     2,
        2,     2,     2,     2,     2,     2,     2,     2,     2,     2,
@@ -559,15 +636,19 @@ static const yytype_int8 yytranslate[] =
        2,     2,     2,     2,     2,     2,     2,     2,     2,     2,
        2,     2,     2,     2,     2,     2,     1,     2,     3,     4,
        5,     6,     7,     8,     9,    10,    11,    12,    13,    14,
-      15,    16,    17,    18,    19,    20
+      15,    16,    17,    18,    19,    20,    21,    22,    23,    24,
+      25,    26,    27,    28,    29,    30,    31,    32,    33,    34,
+      35,    36
 };
 
 #if YYDEBUG
 /* YYRLINE[YYN] -- Source line where rule number YYN was defined.  */
-static const yytype_int8 yyrline[] =
+static const yytype_uint8 yyrline[] =
 {
-       0,    72,    72,    75,    77,    81,    82,    83,    84,    88,
-      89,    90,    91,    92,    93,    95,   103,   105
+       0,   133,   133,   136,   138,   142,   143,   144,   145,   149,
+     150,   151,   152,   153,   154,   155,   156,   157,   158,   159,
+     160,   161,   162,   163,   164,   165,   166,   167,   168,   169,
+     170,   172,   180,   182
 };
 #endif
 
@@ -586,8 +667,10 @@ static const char *const yytname[] =
   "\"end of file\"", "error", "\"invalid token\"", "MOVE", "SAY", "SET",
   "ADD", "SUBTRACT", "IF", "ENDIF", "EXIT", "IDENTIFIER", "STRING",
   "DIRECTION", "OPERATOR", "REPEAT", "ENDREPEAT", "PLACE", "OBJECT_TYPE",
-  "ARITHOP", "NUMBER", "'('", "')'", "$accept", "script", "commands",
-  "expr", "command", YY_NULLPTR
+  "ARITHOP", "GRIDSIZE", "HEALTH", "INVENTORY", "USE", "RANDOM", "SOUND",
+  "WAIT", "TELEPORT", "STATUS", "ATTACK", "MISSION", "GENERATE", "THEME",
+  "COMPLETE", "ADAPT", "POPULATE", "NUMBER", "'('", "')'", "$accept",
+  "script", "commands", "expr", "command", YY_NULLPTR
 };
 
 static const char *
@@ -597,7 +680,7 @@ yysymbol_name (yysymbol_kind_t yysymbol)
 }
 #endif
 
-#define YYPACT_NINF (-19)
+#define YYPACT_NINF (-36)
 
 #define yypact_value_is_default(Yyn) \
   ((Yyn) == YYPACT_NINF)
@@ -611,11 +694,14 @@ yysymbol_name (yysymbol_kind_t yysymbol)
    STATE-NUM.  */
 static const yytype_int8 yypact[] =
 {
-     -19,     3,    34,   -19,    -7,     5,     7,    20,    21,    24,
-     -19,    32,    27,   -19,    33,   -19,    32,    32,    32,    36,
-     -19,   -19,    32,    28,    35,   -19,    28,    28,    28,    32,
-      11,    32,     4,    37,    28,   -19,   -19,   -19,   -19,    19,
-     -19
+     -36,     8,   114,   -36,    -2,    -1,     1,     3,     4,     5,
+     -36,    -7,     7,    -7,    -7,     6,    10,    11,    -7,    -7,
+      12,   -36,   -36,     9,    22,    24,    -7,    26,   -36,    25,
+     -36,    -7,    -7,    -7,    28,   -36,   -36,    -7,    21,    23,
+      21,    21,   -36,   -36,    -7,    21,    21,    -7,    32,    -7,
+     -36,    21,    -7,   -36,    21,    21,    21,    -7,   -12,    -7,
+      48,    30,    -9,    -9,   -36,    21,    21,    21,   -36,   -36,
+     -36,   -36,    21,    21,    81,   -36
 };
 
 /* YYDEFACT[STATE-NUM] -- Default reduction number in state STATE-NUM.
@@ -624,22 +710,25 @@ static const yytype_int8 yypact[] =
 static const yytype_int8 yydefact[] =
 {
        3,     0,     2,     1,     0,     0,     0,     0,     0,     0,
-      17,     0,     0,     4,     0,    10,     0,     0,     0,     0,
-       6,     5,     0,     3,     0,     9,    11,    12,    13,     0,
-       0,     0,     0,     0,     3,     8,     7,    15,    16,     0,
-      14
+      33,     0,     0,     0,     0,     0,     0,     0,     0,     0,
+       0,    23,    24,     0,     0,     0,     0,     0,     4,     0,
+      10,     0,     0,     0,     0,     6,     5,     0,     3,     0,
+      14,    15,    16,    17,     0,    19,    20,    22,     0,     0,
+      27,    28,     0,     9,    11,    12,    13,     0,     0,     0,
+       0,     0,     0,     0,    25,    26,    29,     3,     8,     7,
+      31,    32,    18,    21,     0,    30
 };
 
 /* YYPGOTO[NTERM-NUM].  */
 static const yytype_int8 yypgoto[] =
 {
-     -19,   -19,   -18,   -16,   -19
+     -36,   -36,   -35,   -13,   -36
 };
 
 /* YYDEFGOTO[NTERM-NUM].  */
 static const yytype_int8 yydefgoto[] =
 {
-       0,     1,     2,    23,    13
+       0,     1,     2,    38,    28
 };
 
 /* YYTABLE[YYPACT[STATE-NUM]] -- What to do in state STATE-NUM.  If
@@ -647,47 +736,72 @@ static const yytype_int8 yydefgoto[] =
    number is the opposite.  If YYTABLE_NINF, syntax error.  */
 static const yytype_int8 yytable[] =
 {
-      26,    27,    28,     3,    14,    32,    30,     4,     5,     6,
-       7,     8,     9,    34,    10,    36,    39,    15,    16,    11,
-      37,    12,     4,     5,     6,     7,     8,     9,    40,    10,
-      31,    17,    18,    35,    11,    19,    12,     4,     5,     6,
-       7,     8,     9,    20,    10,    24,    25,    31,     0,    11,
-      29,    12,    21,    22,     0,    33,     0,    38
+      40,    41,    35,    60,    35,    45,    46,    59,     3,    29,
+      59,    30,    31,    51,    32,    33,    34,    42,    54,    55,
+      56,    43,    44,    47,    58,    39,    68,    36,    37,    36,
+      37,    62,    74,    49,    63,    50,    65,    52,    53,    66,
+      59,    48,    57,    64,    67,     0,    69,     0,     0,    72,
+      73,     4,     5,     6,     7,     8,     9,     0,    10,    61,
+       0,     0,     0,    11,    70,    12,    71,     0,    13,    14,
+      15,    16,    17,    18,    19,    20,    21,    22,    23,    24,
+       0,    25,    26,    27,     4,     5,     6,     7,     8,     9,
+      75,    10,     0,     0,     0,     0,    11,     0,    12,     0,
+       0,    13,    14,    15,    16,    17,    18,    19,    20,    21,
+      22,    23,    24,     0,    25,    26,    27,     4,     5,     6,
+       7,     8,     9,     0,    10,     0,     0,     0,     0,    11,
+       0,    12,     0,     0,    13,    14,    15,    16,    17,    18,
+      19,    20,    21,    22,    23,    24,     0,    25,    26,    27
 };
 
 static const yytype_int8 yycheck[] =
 {
-      16,    17,    18,     0,    11,    23,    22,     3,     4,     5,
-       6,     7,     8,    29,    10,    31,    34,    12,    11,    15,
-      16,    17,     3,     4,     5,     6,     7,     8,     9,    10,
-      19,    11,    11,    22,    15,    11,    17,     3,     4,     5,
-       6,     7,     8,    11,    10,    18,    13,    19,    -1,    15,
-      14,    17,    20,    21,    -1,    20,    -1,    20
+      13,    14,    11,    38,    11,    18,    19,    19,     0,    11,
+      19,    12,    11,    26,    11,    11,    11,    11,    31,    32,
+      33,    11,    11,    11,    37,    18,    38,    36,    37,    36,
+      37,    44,    67,    11,    47,    11,    49,    11,    13,    52,
+      19,    32,    14,    11,    57,    -1,    59,    -1,    -1,    62,
+      63,     3,     4,     5,     6,     7,     8,    -1,    10,    36,
+      -1,    -1,    -1,    15,    16,    17,    36,    -1,    20,    21,
+      22,    23,    24,    25,    26,    27,    28,    29,    30,    31,
+      -1,    33,    34,    35,     3,     4,     5,     6,     7,     8,
+       9,    10,    -1,    -1,    -1,    -1,    15,    -1,    17,    -1,
+      -1,    20,    21,    22,    23,    24,    25,    26,    27,    28,
+      29,    30,    31,    -1,    33,    34,    35,     3,     4,     5,
+       6,     7,     8,    -1,    10,    -1,    -1,    -1,    -1,    15,
+      -1,    17,    -1,    -1,    20,    21,    22,    23,    24,    25,
+      26,    27,    28,    29,    30,    31,    -1,    33,    34,    35
 };
 
 /* YYSTOS[STATE-NUM] -- The symbol kind of the accessing symbol of
    state STATE-NUM.  */
 static const yytype_int8 yystos[] =
 {
-       0,    24,    25,     0,     3,     4,     5,     6,     7,     8,
-      10,    15,    17,    27,    11,    12,    11,    11,    11,    11,
-      11,    20,    21,    26,    18,    13,    26,    26,    26,    14,
-      26,    19,    25,    20,    26,    22,    26,    16,    20,    25,
-       9
+       0,    40,    41,     0,     3,     4,     5,     6,     7,     8,
+      10,    15,    17,    20,    21,    22,    23,    24,    25,    26,
+      27,    28,    29,    30,    31,    33,    34,    35,    43,    11,
+      12,    11,    11,    11,    11,    11,    36,    37,    42,    18,
+      42,    42,    11,    11,    11,    42,    42,    11,    32,    11,
+      11,    42,    11,    13,    42,    42,    42,    14,    42,    19,
+      41,    36,    42,    42,    11,    42,    42,    42,    38,    42,
+      16,    36,    42,    42,    41,     9
 };
 
 /* YYR1[RULE-NUM] -- Symbol kind of the left-hand side of rule RULE-NUM.  */
 static const yytype_int8 yyr1[] =
 {
-       0,    23,    24,    25,    25,    26,    26,    26,    26,    27,
-      27,    27,    27,    27,    27,    27,    27,    27
+       0,    39,    40,    41,    41,    42,    42,    42,    42,    43,
+      43,    43,    43,    43,    43,    43,    43,    43,    43,    43,
+      43,    43,    43,    43,    43,    43,    43,    43,    43,    43,
+      43,    43,    43,    43
 };
 
 /* YYR2[RULE-NUM] -- Number of symbols on the right-hand side of rule RULE-NUM.  */
 static const yytype_int8 yyr2[] =
 {
        0,     2,     1,     0,     2,     1,     1,     3,     3,     3,
-       2,     3,     3,     3,     6,     4,     4,     1
+       2,     3,     3,     3,     2,     2,     2,     2,     4,     2,
+       2,     4,     2,     1,     1,     3,     3,     2,     2,     3,
+       6,     4,     4,     1
 };
 
 
@@ -1151,67 +1265,163 @@ yyreduce:
   switch (yyn)
     {
   case 5: /* expr: NUMBER  */
-#line 81 "script.y"
+#line 142 "script.y"
                                     { (yyval.num) = (yyvsp[0].num); }
-#line 1157 "script.tab.c"
+#line 1271 "script.tab.c"
     break;
 
   case 6: /* expr: IDENTIFIER  */
-#line 82 "script.y"
+#line 143 "script.y"
                                     { (yyval.num) = get_var((yyvsp[0].str)); free((yyvsp[0].str)); }
-#line 1163 "script.tab.c"
+#line 1277 "script.tab.c"
     break;
 
   case 7: /* expr: expr ARITHOP expr  */
-#line 83 "script.y"
+#line 144 "script.y"
                                     { (yyval.num) = eval_arith((yyvsp[-2].num), (yyvsp[-1].str), (yyvsp[0].num)); }
-#line 1169 "script.tab.c"
+#line 1283 "script.tab.c"
     break;
 
   case 8: /* expr: '(' expr ')'  */
-#line 84 "script.y"
+#line 145 "script.y"
                                     { (yyval.num) = (yyvsp[-1].num); }
-#line 1175 "script.tab.c"
+#line 1289 "script.tab.c"
     break;
 
   case 9: /* command: MOVE IDENTIFIER DIRECTION  */
-#line 88 "script.y"
+#line 149 "script.y"
                                     { move_player((yyvsp[0].str)); }
-#line 1181 "script.tab.c"
+#line 1295 "script.tab.c"
     break;
 
   case 10: /* command: SAY STRING  */
-#line 89 "script.y"
+#line 150 "script.y"
                                    { printf(GREEN "%s\n" RESET, (yyvsp[0].str)); free((yyvsp[0].str)); }
-#line 1187 "script.tab.c"
+#line 1301 "script.tab.c"
     break;
 
   case 11: /* command: SET IDENTIFIER expr  */
-#line 90 "script.y"
+#line 151 "script.y"
                                    { set_var((yyvsp[-1].str), (yyvsp[0].num)); printf(GREEN "%s set to %d\n" RESET, (yyvsp[-1].str), (yyvsp[0].num)); free((yyvsp[-1].str)); }
-#line 1193 "script.tab.c"
+#line 1307 "script.tab.c"
     break;
 
   case 12: /* command: ADD IDENTIFIER expr  */
-#line 91 "script.y"
+#line 152 "script.y"
                                    { add_var((yyvsp[-1].str), (yyvsp[0].num)); printf(GREEN "%s updated to %d\n" RESET, (yyvsp[-1].str), get_var((yyvsp[-1].str))); free((yyvsp[-1].str)); }
-#line 1199 "script.tab.c"
+#line 1313 "script.tab.c"
     break;
 
   case 13: /* command: SUBTRACT IDENTIFIER expr  */
-#line 92 "script.y"
+#line 153 "script.y"
                                    { subtract_var((yyvsp[-1].str), (yyvsp[0].num)); printf(GREEN "%s updated to %d\n" RESET, (yyvsp[-1].str), get_var((yyvsp[-1].str))); free((yyvsp[-1].str)); }
-#line 1205 "script.tab.c"
+#line 1319 "script.tab.c"
     break;
 
-  case 14: /* command: IF IDENTIFIER OPERATOR expr commands ENDIF  */
-#line 94 "script.y"
+  case 14: /* command: GRIDSIZE expr  */
+#line 154 "script.y"
+                                   { set_grid_size((yyvsp[0].num)); }
+#line 1325 "script.tab.c"
+    break;
+
+  case 15: /* command: HEALTH expr  */
+#line 155 "script.y"
+                                   { change_health((yyvsp[0].num)); }
+#line 1331 "script.tab.c"
+    break;
+
+  case 16: /* command: INVENTORY IDENTIFIER  */
+#line 156 "script.y"
+                                   { add_to_inventory((yyvsp[0].str)); free((yyvsp[0].str)); }
+#line 1337 "script.tab.c"
+    break;
+
+  case 17: /* command: USE IDENTIFIER  */
+#line 157 "script.y"
+                                   { use_item((yyvsp[0].str)); free((yyvsp[0].str)); }
+#line 1343 "script.tab.c"
+    break;
+
+  case 18: /* command: RANDOM IDENTIFIER expr expr  */
+#line 158 "script.y"
+                                   { set_var((yyvsp[-2].str), generate_random((yyvsp[-1].num), (yyvsp[0].num))); free((yyvsp[-2].str)); }
+#line 1349 "script.tab.c"
+    break;
+
+  case 19: /* command: SOUND expr  */
+#line 159 "script.y"
+                                   { sound_enabled = (yyvsp[0].num); printf(GREEN "Sound %s\n" RESET, (yyvsp[0].num) ? "enabled" : "disabled"); }
+#line 1355 "script.tab.c"
+    break;
+
+  case 20: /* command: WAIT expr  */
+#line 160 "script.y"
+                                   { wait_time((yyvsp[0].num)); }
+#line 1361 "script.tab.c"
+    break;
+
+  case 21: /* command: TELEPORT IDENTIFIER expr expr  */
+#line 161 "script.y"
+                                    { create_teleport((yyvsp[-2].str), (yyvsp[-1].num), (yyvsp[0].num)); free((yyvsp[-2].str)); }
+#line 1367 "script.tab.c"
+    break;
+
+  case 22: /* command: TELEPORT IDENTIFIER  */
+#line 162 "script.y"
+                                   { teleport_to((yyvsp[0].str)); free((yyvsp[0].str)); }
+#line 1373 "script.tab.c"
+    break;
+
+  case 23: /* command: STATUS  */
+#line 163 "script.y"
+                                   { show_status(); }
+#line 1379 "script.tab.c"
+    break;
+
+  case 24: /* command: ATTACK  */
+#line 164 "script.y"
+                                   { attack_enemies_nearby(); }
+#line 1385 "script.tab.c"
+    break;
+
+  case 25: /* command: MISSION THEME IDENTIFIER  */
+#line 165 "script.y"
+                                   { strcpy(mission_theme, (yyvsp[0].str)); generate_mission((yyvsp[0].str), dungeon_complexity); free((yyvsp[0].str)); }
+#line 1391 "script.tab.c"
+    break;
+
+  case 26: /* command: GENERATE IDENTIFIER expr  */
+#line 166 "script.y"
+                                   { if(strcmp((yyvsp[-1].str), "dungeon") == 0) generate_dungeon_space((yyvsp[0].num), generation_style); free((yyvsp[-1].str)); }
+#line 1397 "script.tab.c"
+    break;
+
+  case 27: /* command: COMPLETE IDENTIFIER  */
+#line 167 "script.y"
+                                   { int task_id = find_task_by_name((yyvsp[0].str)); if(task_id >= 0) complete_task(task_id); free((yyvsp[0].str)); }
+#line 1403 "script.tab.c"
+    break;
+
+  case 28: /* command: ADAPT expr  */
+#line 168 "script.y"
+                                   { adaptive_difficulty = (yyvsp[0].num); if((yyvsp[0].num)) adapt_difficulty(); printf(GREEN "Adaptive difficulty %s\n" RESET, (yyvsp[0].num) ? "enabled" : "disabled"); }
+#line 1409 "script.tab.c"
+    break;
+
+  case 29: /* command: POPULATE IDENTIFIER expr  */
+#line 169 "script.y"
+                                   { procedural_populate((yyvsp[0].num), (yyvsp[-1].str)); free((yyvsp[-1].str)); }
+#line 1415 "script.tab.c"
+    break;
+
+  case 30: /* command: IF IDENTIFIER OPERATOR expr commands ENDIF  */
+#line 171 "script.y"
         { if(eval_expr(get_var((yyvsp[-4].str)), (yyvsp[-3].str), (yyvsp[-2].num))) { /* already executed commands */ } }
-#line 1211 "script.tab.c"
+#line 1421 "script.tab.c"
     break;
 
-  case 15: /* command: REPEAT expr commands ENDREPEAT  */
-#line 96 "script.y"
+  case 31: /* command: REPEAT expr commands ENDREPEAT  */
+#line 173 "script.y"
         { 
             // Note: This simple implementation executes loop body once during parsing
             // For proper loop execution, you'd need to store and re-execute the commands
@@ -1219,17 +1429,17 @@ yyreduce:
                 printf(YELLOW "Loop iteration %d\n" RESET, i+1);
             }
         }
-#line 1223 "script.tab.c"
+#line 1433 "script.tab.c"
     break;
 
-  case 16: /* command: PLACE OBJECT_TYPE NUMBER NUMBER  */
-#line 104 "script.y"
+  case 32: /* command: PLACE OBJECT_TYPE NUMBER NUMBER  */
+#line 181 "script.y"
         { place_object((yyvsp[-2].str), (yyvsp[-1].num), (yyvsp[0].num)); }
-#line 1229 "script.tab.c"
+#line 1439 "script.tab.c"
     break;
 
-  case 17: /* command: EXIT  */
-#line 106 "script.y"
+  case 33: /* command: EXIT  */
+#line 183 "script.y"
         { 
             if(interactive_mode) {
                 exit_interactive = 1;
@@ -1237,11 +1447,11 @@ yyreduce:
                 exit(0);
             }
         }
-#line 1241 "script.tab.c"
+#line 1451 "script.tab.c"
     break;
 
 
-#line 1245 "script.tab.c"
+#line 1455 "script.tab.c"
 
       default: break;
     }
@@ -1434,10 +1644,167 @@ yyreturnlab:
   return yyresult;
 }
 
-#line 115 "script.y"
+#line 192 "script.y"
 
 
-// ---------------------- Helper Functions ----------------------
+// ---------------------- Enhanced Helper Functions ----------------------
+
+void play_sound(){
+    if(sound_enabled){
+        printf("\a"); // Terminal beep
+        fflush(stdout);
+    }
+}
+
+int generate_random(int min, int max){
+    if(max <= min) return min;
+    return min + (rand() % (max - min + 1));
+}
+
+void wait_time(int seconds){
+    printf(YELLOW "Waiting %d seconds...\n" RESET, seconds);
+    for(int i = 0; i < seconds; i++){
+        printf(".");
+        fflush(stdout);
+        usleep(1000000); // 1 second
+    }
+    printf("\n");
+}
+
+void change_health(int amount){
+    player_health += amount;
+    if(player_health > max_health) player_health = max_health;
+    if(player_health < 0) player_health = 0;
+    
+    if(amount > 0){
+        printf(GREEN "Health restored by %d! Current: %d/%d\n" RESET, amount, player_health, max_health);
+        play_sound();
+    } else if(amount < 0){
+        printf(RED "Took %d damage! Current: %d/%d\n" RESET, -amount, player_health, max_health);
+        play_sound();
+    }
+    
+    if(player_health == 0){
+        printf(RED "\n*** GAME OVER - You died! ***\n" RESET);
+        if(!interactive_mode) exit(0);
+    }
+}
+
+void add_to_inventory(char *item){
+    if(inventory_count < 10){
+        strcpy(inventory[inventory_count], item);
+        inventory_count++;
+        printf(GREEN "Added %s to inventory\n" RESET, item);
+        play_sound();
+    } else {
+        printf(RED "Inventory full!\n" RESET);
+    }
+}
+
+void use_item(char *item){
+    for(int i = 0; i < inventory_count; i++){
+        if(strcmp(inventory[i], item) == 0){
+            printf(GREEN "Used %s\n" RESET, item);
+            
+            // Item effects
+            if(strcmp(item, "potion") == 0){
+                change_health(25);
+            } else if(strcmp(item, "sword") == 0){
+                printf(GREEN "Sword equipped! Attack power increased\n" RESET);
+            } else if(strcmp(item, "key") == 0){
+                printf(GREEN "Door unlocked!\n" RESET);
+            }
+            
+            // Remove item from inventory
+            for(int j = i; j < inventory_count - 1; j++){
+                strcpy(inventory[j], inventory[j + 1]);
+            }
+            inventory_count--;
+            play_sound();
+            return;
+        }
+    }
+    printf(RED "Item '%s' not found in inventory\n" RESET, item);
+}
+
+void create_teleport(char *name, int x, int y){
+    if(teleport_count < 10 && x >= 0 && x < GRID_SIZE && y >= 0 && y < GRID_SIZE){
+        strcpy(teleports[teleport_count].name, name);
+        teleports[teleport_count].x = x;
+        teleports[teleport_count].y = y;
+        teleport_count++;
+        grid[x][y] = 'T';
+        printf(GREEN "Teleport point '%s' created at (%d, %d)\n" RESET, name, x, y);
+        print_grid();
+    }
+}
+
+void teleport_to(char *name){
+    for(int i = 0; i < teleport_count; i++){
+        if(strcmp(teleports[i].name, name) == 0){
+            grid[player_x][player_y] = '.';
+            player_x = teleports[i].x;
+            player_y = teleports[i].y;
+            grid[player_x][player_y] = player_symbol;
+            printf(GREEN "Teleported to %s!\n" RESET, name);
+            play_sound();
+            print_grid();
+            return;
+        }
+    }
+    printf(RED "Teleport point '%s' not found\n" RESET, name);
+}
+
+void show_status(){
+    printf(YELLOW "\n=== Player Status ===\n" RESET);
+    printf("Position: (%d, %d)\n", player_x, player_y);
+    printf("Health: %d/%d\n", player_health, max_health);
+    printf("Score: %d\n", player_score);
+    printf("Game Time: %d\n", game_time);
+    printf("Inventory (%d/10): ", inventory_count);
+    for(int i = 0; i < inventory_count; i++){
+        printf("%s ", inventory[i]);
+    }
+    printf("\n");
+    printf("Teleports available: ");
+    for(int i = 0; i < teleport_count; i++){
+        printf("%s ", teleports[i].name);
+    }
+    printf("\n" RESET);
+    
+    // Show mission status if active
+    if(task_count > 0){
+        show_mission_status();
+    }
+}
+
+void attack_enemies_nearby(){
+    int enemies_defeated = 0;
+    // Check adjacent cells for enemies
+    int directions[4][2] = {{-1,0}, {1,0}, {0,-1}, {0,1}};
+    
+    for(int i = 0; i < 4; i++){
+        int nx = player_x + directions[i][0];
+        int ny = player_y + directions[i][1];
+        
+        if(nx >= 0 && nx < GRID_SIZE && ny >= 0 && ny < GRID_SIZE){
+            if(grid[nx][ny] == 'E'){
+                grid[nx][ny] = '.';
+                enemies_defeated++;
+                player_score += 50;
+                enemies_count--;
+            }
+        }
+    }
+    
+    if(enemies_defeated > 0){
+        printf(GREEN "Defeated %d enemies! Score: %d\n" RESET, enemies_defeated, player_score);
+        play_sound();
+        print_grid();
+    } else {
+        printf(RED "No enemies nearby to attack\n" RESET);
+    }
+}
 
 int get_var(char *name){
     for(int i=0;i<var_count;i++)
@@ -1513,23 +1880,63 @@ void move_player(char *dir){
     if(strcmp(dir,"LEFT")==0) new_y = (player_y-1+GRID_SIZE)%GRID_SIZE;
     if(strcmp(dir,"RIGHT")==0) new_y = (player_y+1)%GRID_SIZE;
     
-    // Check for obstacles
-    if(grid[new_x][new_y] == '#'){
+    char target = grid[new_x][new_y];
+    
+    // Check for different object types
+    if(target == '#' || target == '|'){  // Obstacle or Wall
         printf(RED "Can't move! Obstacle in the way!\n" RESET);
         return;
     }
     
-    // Check for items
-    if(grid[new_x][new_y] == '*'){
-        player_score += 10;
-        printf(GREEN "Collected item! Score: %d\n" RESET, player_score);
+    if(target == 'D'){  // Door
+        printf(RED "Door is locked! Need a key.\n" RESET);
+        return;
     }
     
-    grid[player_x][player_y]='.';
+    if(target == '*'){  // Item
+        player_score += 10;
+        printf(GREEN "Collected item! Score: %d\n" RESET, player_score);
+        play_sound();
+    }
+    
+    if(target == '+'){  // Power-up
+        player_score += 25;
+        change_health(15);
+        printf(GREEN "Power-up collected! Score: %d\n" RESET, player_score);
+    }
+    
+    if(target == 'E'){  // Enemy
+        change_health(-20);
+        printf(RED "Enemy attacked you!\n" RESET);
+        if(player_health > 0){
+            grid[new_x][new_y] = '.';
+            enemies_count--;
+            printf(GREEN "Enemy defeated in combat!\n" RESET);
+        }
+    }
+    
+    if(target == 'T'){  // Teleport point
+        printf(YELLOW "Stepped on teleport point\n" RESET);
+    }
+    
+    // Move player
+    grid[player_x][player_y] = '.';
     player_x = new_x;
     player_y = new_y;
-    grid[player_x][player_y]=player_symbol;
+    grid[player_x][player_y] = player_symbol;
+    game_time++;
+    
+    // Check mission progress
+    if(task_count > 0) check_mission_progress();
+    
     print_grid();
+    
+    // Random events with adaptive probability
+    int event_chance = adaptive_difficulty ? (5 + player_skill_level) : 5;
+    if(generate_random(1, 100) <= event_chance){  
+        printf(YELLOW "Random event: Found a potion!\n" RESET);
+        add_to_inventory("potion");
+    }
 }
 
 void place_object(char *type, int x, int y){
@@ -1548,7 +1955,47 @@ void place_object(char *type, int x, int y){
     } else if(strcmp(type, "ITEM") == 0){
         grid[x][y] = '*';
         printf(GREEN "Placed item at (%d, %d)\n" RESET, x, y);
+    } else if(strcmp(type, "ENEMY") == 0){
+        grid[x][y] = 'E';
+        enemies_count++;
+        printf(GREEN "Placed enemy at (%d, %d)\n" RESET, x, y);
+    } else if(strcmp(type, "POWERUP") == 0){
+        grid[x][y] = '+';
+        printf(GREEN "Placed power-up at (%d, %d)\n" RESET, x, y);
+    } else if(strcmp(type, "WALL") == 0){
+        grid[x][y] = '|';
+        printf(GREEN "Placed wall at (%d, %d)\n" RESET, x, y);
+    } else if(strcmp(type, "DOOR") == 0){
+        grid[x][y] = 'D';
+        printf(GREEN "Placed door at (%d, %d)\n" RESET, x, y);
     }
+    print_grid();
+}
+
+void set_grid_size(int size){
+    // Validate grid size
+    if(size != 3 && size != 4 && size != 5 && size != 10 && size != 15 && 
+       size != 20 && size != 25 && size != 50 && size != 100){
+        printf(RED "Invalid grid size! Choose from: 3, 4, 5, 10, 15, 20, 25, 50, 100\n" RESET);
+        return;
+    }
+    
+    if(size > MAX_GRID_SIZE){
+        printf(RED "Grid size exceeds maximum (%d)!\n" RESET, MAX_GRID_SIZE);
+        return;
+    }
+    
+    GRID_SIZE = size;
+    player_x = 0;
+    player_y = 0;
+    player_score = 0;
+    player_health = max_health;
+    game_time = 0;
+    inventory_count = 0;
+    teleport_count = 0;
+    enemies_count = 0;
+    init_grid();
+    printf(GREEN "Grid size set to %dx%d. Game state reset!\n" RESET, size, size);
     print_grid();
 }
 
@@ -1559,12 +2006,14 @@ void yyerror(const char *s){
 // ---------------------- Main Program ----------------------
 
 int main(int argc, char *argv[]){
+    srand(time(NULL));  // Initialize random seed
     init_grid();
     while(1){
         printf("====================================\n");
         printf("  Mini Game Script Interpreter\n");
         printf("====================================\n");
-        printf("1. Interactive Mode\n2. Run Script from File\n3. Exit\n");
+        printf("Current Grid Size: %dx%d | Health: %d/%d\n", GRID_SIZE, GRID_SIZE, player_health, max_health);
+        printf("1. Interactive Mode\n2. Run Script from File\n3. Change Grid Size\n4. Exit\n");
         printf("Enter choice: ");
         int choice;
         scanf("%d",&choice);
@@ -1576,11 +2025,18 @@ int main(int argc, char *argv[]){
             player_x = 0;
             player_y = 0;
             player_score = 0;
+            player_health = max_health;
+            game_time = 0;
+            inventory_count = 0;
+            teleport_count = 0;
+            enemies_count = 0;
             var_count = 0;
             init_grid();
             
             printf(GREEN "\nInteractive Mode: Type commands (EXIT to quit)\n" RESET);
-            printf("Available commands: MOVE, SAY, SET, ADD, SUBTRACT, IF, REPEAT, PLACE, EXIT\n");
+            printf("Available commands: MOVE, SAY, SET, ADD, SUBTRACT, IF, REPEAT, PLACE,\n");
+            printf("                   GRIDSIZE, HEALTH, INVENTORY, USE, RANDOM, SOUND,\n");
+            printf("                   WAIT, TELEPORT, STATUS, ATTACK, EXIT\n");
             printf("For multi-line blocks (REPEAT/IF), type commands until ENDREPEAT/ENDIF\n\n");
             print_grid();
             
@@ -1683,6 +2139,11 @@ int main(int argc, char *argv[]){
             player_x = 0;
             player_y = 0;
             player_score = 0;
+            player_health = max_health;
+            game_time = 0;
+            inventory_count = 0;
+            teleport_count = 0;
+            enemies_count = 0;
             var_count = 0;
             init_grid();
             
@@ -1699,7 +2160,231 @@ int main(int argc, char *argv[]){
             }
             fclose(f);
             printf(GREEN "\nScript execution completed.\n" RESET);
+        } else if(choice==3){
+            printf("\nAvailable grid sizes: 3, 4, 5, 10, 15, 20, 25, 50, 100\n");
+            printf("Enter grid size: ");
+            int new_size;
+            scanf("%d", &new_size);
+            getchar(); // consume newline
+            set_grid_size(new_size);
+            printf("\nPress Enter to continue...");
+            getchar();
         } else break;
     }
     return 0;
+}
+
+// ---------------------- Mission Generation Functions ----------------------
+
+void generate_mission(char *theme, int complexity){
+    printf(GREEN "Generating %s mission with complexity %d...\n" RESET, theme, complexity);
+    
+    task_count = 0;
+    current_mission_step = 0;
+    strcpy(mission_theme, theme);
+    
+    // Simple mission generation based on theme
+    if(strcmp(theme, "adventure") == 0){
+        // Create tutorial task
+        strcpy(mission_tasks[task_count].type, "tutorial");
+        strcpy(mission_tasks[task_count].name, "start_quest");
+        mission_tasks[task_count].x = generate_random(1, GRID_SIZE-2);
+        mission_tasks[task_count].y = generate_random(1, GRID_SIZE-2);
+        mission_tasks[task_count].required_task = -1;
+        mission_tasks[task_count].completed = 0;
+        task_count++;
+        
+        // Create challenge tasks
+        for(int i = 0; i < complexity; i++){
+            strcpy(mission_tasks[task_count].type, "challenge");
+            sprintf(mission_tasks[task_count].name, "task_%d", i+1);
+            mission_tasks[task_count].x = generate_random(1, GRID_SIZE-2);
+            mission_tasks[task_count].y = generate_random(1, GRID_SIZE-2);
+            mission_tasks[task_count].required_task = (i == 0) ? 0 : task_count - 1;
+            mission_tasks[task_count].completed = 0;
+            task_count++;
+        }
+        
+        // Create final boss
+        strcpy(mission_tasks[task_count].type, "boss");
+        strcpy(mission_tasks[task_count].name, "final_boss");
+        mission_tasks[task_count].x = generate_random(1, GRID_SIZE-2);
+        mission_tasks[task_count].y = generate_random(1, GRID_SIZE-2);
+        mission_tasks[task_count].required_task = task_count - 1;
+        mission_tasks[task_count].completed = 0;
+        task_count++;
+    }
+    
+    place_mission_objects();
+    printf(GREEN "Mission generated with %d tasks!\n" RESET, task_count);
+    show_mission_status();
+}
+
+void generate_dungeon_space(int size, char *style){
+    printf(GREEN "Generating %dx%d dungeon...\n" RESET, size, size);
+    set_grid_size(size);
+    
+    // Create hub-and-spoke layout
+    int center_x = size / 2;
+    int center_y = size / 2;
+    
+    // Place central hub
+    place_object("POWERUP", center_x, center_y);
+    
+    // Create four spokes
+    if(center_x - 2 >= 0) place_object("ITEM", center_x - 2, center_y);
+    if(center_x + 2 < size) place_object("ITEM", center_x + 2, center_y);
+    if(center_y - 2 >= 0) place_object("ITEM", center_x, center_y - 2);
+    if(center_y + 2 < size) place_object("ITEM", center_x, center_y + 2);
+    
+    printf(GREEN "Dungeon space generated!\n" RESET);
+}
+
+void place_mission_objects(){
+    for(int i = 0; i < task_count; i++){
+        int x = mission_tasks[i].x;
+        int y = mission_tasks[i].y;
+        
+        // Ensure position is valid and not occupied
+        if(x >= 0 && x < GRID_SIZE && y >= 0 && y < GRID_SIZE && 
+           grid[x][y] == '.' && (x != player_x || y != player_y)){
+            
+            if(strcmp(mission_tasks[i].type, "boss") == 0){
+                grid[x][y] = 'B';
+            } else if(strcmp(mission_tasks[i].type, "challenge") == 0){
+                place_object("ENEMY", x, y);
+            } else {
+                grid[x][y] = 'M';  // Mission marker
+            }
+        }
+    }
+    print_grid();
+}
+
+void check_mission_progress(){
+    for(int i = 0; i < task_count; i++){
+        if(!mission_tasks[i].completed && 
+           player_x == mission_tasks[i].x && player_y == mission_tasks[i].y){
+            
+            // Check if prerequisites are met
+            if(mission_tasks[i].required_task == -1 || 
+               mission_tasks[mission_tasks[i].required_task].completed){
+                complete_task(i);
+            } else {
+                printf(YELLOW "Complete previous task first!\n" RESET);
+            }
+        }
+    }
+}
+
+void complete_task(int task_id){
+    if(task_id >= 0 && task_id < task_count && !mission_tasks[task_id].completed){
+        mission_tasks[task_id].completed = 1;
+        current_mission_step++;
+        
+        printf(GREEN "Task completed: %s\n" RESET, mission_tasks[task_id].name);
+        play_sound();
+        
+        // Clear mission marker from grid
+        grid[mission_tasks[task_id].x][mission_tasks[task_id].y] = '.';
+        
+        // Give rewards based on task type
+        if(strcmp(mission_tasks[task_id].type, "boss") == 0){
+            player_score += 500;
+            printf(GREEN "MISSION COMPLETE!\n" RESET);
+        } else if(strcmp(mission_tasks[task_id].type, "challenge") == 0){
+            player_score += 100;
+        } else {
+            player_score += 50;
+        }
+        
+        if(adaptive_difficulty) adapt_difficulty();
+        print_grid();
+    }
+}
+
+int find_task_by_name(char *name){
+    for(int i = 0; i < task_count; i++){
+        if(strcmp(mission_tasks[i].name, name) == 0){
+            return i;
+        }
+    }
+    printf(RED "Task '%s' not found\n" RESET, name);
+    return -1;
+}
+
+void adapt_difficulty(){
+    float success_rate = (game_time > 0) ? (float)current_mission_step / game_time : 0;
+    
+    if(success_rate > 0.8 && player_skill_level < 5){
+        player_skill_level++;
+        printf(YELLOW "Difficulty increased! Skill level: %d\n" RESET, player_skill_level);
+    } else if(success_rate < 0.3 && player_skill_level > 1){
+        player_skill_level--;
+        printf(YELLOW "Difficulty decreased! Here's some help. Skill level: %d\n" RESET, player_skill_level);
+        change_health(25);  // Give health boost
+    }
+}
+
+void show_mission_status(){
+    if(task_count == 0){
+        printf(YELLOW "No active mission\n" RESET);
+        return;
+    }
+    
+    printf(YELLOW "\n=== Mission Status ===\n" RESET);
+    printf("Theme: %s | Progress: %d/%d tasks\n", mission_theme, current_mission_step, task_count);
+    printf("Skill Level: %d | Adaptive: %s\n", player_skill_level, adaptive_difficulty ? "ON" : "OFF");
+    
+    for(int i = 0; i < task_count; i++){
+        char status_icon;
+        if(mission_tasks[i].completed){
+            status_icon = 'X';
+        } else if(mission_tasks[i].required_task == -1 || 
+                  mission_tasks[mission_tasks[i].required_task].completed){
+            status_icon = 'O';  // Available
+        } else {
+            status_icon = '-';  // Blocked
+        }
+        
+        printf("%c %s (%s) at (%d,%d)\n", 
+               status_icon, mission_tasks[i].name, mission_tasks[i].type,
+               mission_tasks[i].x, mission_tasks[i].y);
+    }
+    printf(RESET);
+}
+
+void procedural_populate(int density, char *type){
+    printf(GREEN "Procedurally populating with %d %s objects...\n" RESET, density, type);
+    
+    int placed = 0;
+    int attempts = 0;
+    int max_attempts = density * 3;
+    
+    while(placed < density && attempts < max_attempts){
+        int x = generate_random(1, GRID_SIZE-2);
+        int y = generate_random(1, GRID_SIZE-2);
+        
+        // Only place if cell is empty and not player position
+        if(grid[x][y] == '.' && (x != player_x || y != player_y)){
+            if(strcmp(type, "random") == 0){
+                // Random object selection
+                int obj_type = generate_random(1, 6);
+                switch(obj_type){
+                    case 1: place_object("OBSTACLE", x, y); break;
+                    case 2: place_object("ITEM", x, y); break;
+                    case 3: place_object("ENEMY", x, y); break;
+                    case 4: place_object("POWERUP", x, y); break;
+                    case 5: place_object("WALL", x, y); break;
+                    case 6: place_object("DOOR", x, y); break;
+                }
+            } else {
+                place_object(type, x, y);
+            }
+            placed++;
+        }
+        attempts++;
+    }
+    
+    printf(GREEN "Placed %d objects (%d attempts)\n" RESET, placed, attempts);
 }

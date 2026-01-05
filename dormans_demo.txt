@@ -1,0 +1,108 @@
+SAY "=== Procedural Adventure Demo ==="
+SAY "Inspired by Dormans' research on mission/space generation"
+
+SAY "Setting up dynamic world..."
+GRIDSIZE 15
+SOUND 1
+
+SAY "Initial player status:"
+STATUS
+
+SAY "Creating procedural world layout..."
+POPULATE random 8
+SAY "World populated with random objects!"
+
+SAY "Generating quest structure..."
+SAY "Phase 1: Tutorial and Setup"
+PLACE ITEM 2 2
+TELEPORT tutorial_complete 2 2
+
+SAY "Phase 2: Three-Act Mission Structure"
+SAY "Act 1: Learning phase"
+PLACE POWERUP 5 5
+TELEPORT act1_complete 5 5
+
+SAY "Act 2: Challenge phase" 
+PLACE ENEMY 8 8
+PLACE ENEMY 10 10
+PLACE WALL 9 8
+PLACE WALL 9 9
+PLACE WALL 9 10
+
+SAY "Act 3: Resolution phase"
+PLACE DOOR 12 12
+TELEPORT final_area 13 13
+
+SAY "Adding adaptive elements..."
+INVENTORY sword
+INVENTORY key
+INVENTORY potion
+
+SAY "Beginning procedural adventure!"
+SAY "Navigate to complete tutorial at (2,2)..."
+
+MOVE player RIGHT
+MOVE player RIGHT
+MOVE player DOWN
+MOVE player DOWN
+
+SAY "Tutorial complete! Moving to Act 1..."
+TELEPORT act1_complete
+
+SAY "Act 1 power-up collected! Preparing for challenges..."
+MOVE player RIGHT
+MOVE player RIGHT
+MOVE player RIGHT
+
+SAY "Engaging enemies in Act 2..."
+ATTACK
+USE sword
+HEALTH -10
+SAY "Battle damage taken!"
+
+USE potion
+SAY "Healed for next challenge!"
+
+SAY "Proceeding to final area..."
+USE key
+MOVE player RIGHT
+MOVE player RIGHT
+MOVE player RIGHT
+MOVE player DOWN
+MOVE player DOWN
+MOVE player DOWN
+MOVE player DOWN
+
+TELEPORT final_area
+
+SAY "Testing adaptive difficulty based on performance..."
+RANDOM performance_bonus 50 150
+ADD score performance_bonus
+SAY "Performance bonus applied!"
+
+SAY "Generating final random encounter..."
+RANDOM encounter_type 1 3
+IF encounter_type == 1
+    SAY "Treasure encounter!"
+    INVENTORY treasure
+ENDIF
+
+IF encounter_type == 2
+    SAY "Combat encounter!"
+    ATTACK
+ENDIF
+
+IF encounter_type == 3
+    SAY "Puzzle encounter!"
+    SET puzzle_solved 1
+ENDIF
+
+SAY "Final status after procedural adventure:"
+STATUS
+
+SET mission_score (score + 200)
+SAY "Mission complete! Procedural elements successfully demonstrated."
+SAY "This showcases Dormans' concepts: mission structure, space generation,"
+SAY "adaptive difficulty, and grammar-based content creation."
+
+EXIT
