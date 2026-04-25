@@ -1,3 +1,12 @@
+/* Lexer: script.l
+	 Purpose: Hand-written lexical scanner for the MiniGameScript language.
+	 I wrote this lexer to produce tokens consumed by the parser in script.y.
+	 Notes:
+	 - This file is a source artifact (not generated). The compiled lexer
+		 `lex.yy.c` is produced at build-time from this file.
+	 - Keep token names in sync with script.tab.h / script.y.
+	 - Rules should avoid side effects; values are strdup'd into yylval.
+*/
 %{
 #include "script.tab.h"
 #include <stdio.h>
@@ -5,12 +14,14 @@
 #include <string.h>
 %}
 
+/* Definitions: character classes and token macros */
 DIGIT       [0-9]
 ID          [a-zA-Z_][a-zA-Z0-9_]*
 STRING      \"[^\"]*\"
 OP          "=="|"!="|">="|"<="|">"|"<"
 ARITHOP     "+"|"-"|"*"|"/"|"%"
 
+/* Rules: keyword/token recognition. Exact-match keywords return token enums. */
 %%
 
 "MOVE"      { return MOVE; }
@@ -54,6 +65,7 @@ ARITHOP     "+"|"-"|"*"|"/"|"%"
 "UP"|"DOWN"|"LEFT"|"RIGHT" { yylval.str = strdup(yytext); return DIRECTION; }
 "OBSTACLE"|"ITEM"|"ENEMY"|"POWERUP"|"WALL"|"DOOR" { yylval.str = strdup(yytext); return OBJECT_TYPE; }
 
+/* Generic token rules: identifiers, numbers, strings, operators */
 {ID}        { yylval.str = strdup(yytext); return IDENTIFIER; }
 {DIGIT}+    { yylval.num = atoi(yytext); return NUMBER; }
 {STRING}    { yylval.str = strdup(yytext); return STRING; }
