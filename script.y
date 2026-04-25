@@ -268,7 +268,11 @@ command:
 
 %%
 
-// ---------------------- Enhanced Helper Functions ----------------------
+/* Module: Helper functions
+    Wrote small utilities for sound, random generation, timing,
+    health management and inventory handling. These keep gameplay
+    code concise and are my handwritten helpers (not auto-generated).
+*/
 
 void play_sound(){
     if(sound_enabled){
@@ -567,7 +571,11 @@ void move_player(char *dir){
     }
 }
 
-// ---------------------- Interaction Rules & Helpers ----------------------
+/* Module: Interaction rules & collision handling
+    Implemented the rule system and collision helpers here. This
+    maps object type names to symbols and applies my collision
+    actions (BLOCK, DAMAGE, HEAL, SCORE, DELETE, TRANSFORM).
+*/
 
 char object_symbol(const char *type){
     if(strcmp(type, "PLAYER") == 0) return 'P';
@@ -618,7 +626,11 @@ void apply_player_collision(char target, int x, int y, int *blocked, int *handle
     }
 }
 
-// ---------------------- Enemy AI Step (BFS/Dijkstra-inspired) ----------------------
+/* Module: Enemy AI (BFS)
+    Implemented a simple BFS-based enemy movement so enemies
+    can path toward the player each AI step. This is my custom
+    chase behaviour used by enemies in the grid.
+*/
 void enemy_ai_step(){
     int dist[MAX_GRID_SIZE][MAX_GRID_SIZE];
     for(int i=0;i<GRID_SIZE;i++) for(int j=0;j<GRID_SIZE;j++) dist[i][j] = -1;
@@ -746,7 +758,11 @@ void yyerror(const char *s){
     fprintf(stderr, RED "Error: %s\n" RESET, s);
 }
 
-// ---------------------- Main Program ----------------------
+/* Module: Main loop and interactive shell
+    Wrote the program entrypoint and the interactive REPL/menu
+    for running scripts or playing interactively. This controls
+    game state reset and script execution paths.
+*/
 
 int main(int argc, char *argv[]){
     srand(time(NULL));  // Initialize random seed
@@ -917,7 +933,11 @@ int main(int argc, char *argv[]){
     return 0;
 }
 
-// ---------------------- Mission Generation Functions ----------------------
+/* Module: Mission generation
+    I implemented procedural mission/task generation (tutorial,
+    challenges, boss) and placement logic. These create missions
+    based on theme and complexity — my procedural content code.
+*/
 
 void generate_mission(char *theme, int complexity){
     printf(GREEN "Generating %s mission with complexity %d...\n" RESET, theme, complexity);
@@ -1132,9 +1152,17 @@ void procedural_populate(int density, char *type){
     printf(GREEN "Placed %d objects (%d attempts)\n" RESET, placed, attempts);
 }
 
-// ---------------------- Advanced Features Inspired by Research ----------------------
+/* Module: Advanced features (rules, pathfinding, flow & adaptive difficulty)
+    Integrated PuzzleScript-style rules, Brogue/Dijkstra pathfinding,
+    flow metrics and adaptive difficulty adjustments. These are my
+    higher-level systems that tie generation, rules, AI and difficulty.
+*/
 
-// PuzzleScript-style rule system
+/* Module: PuzzleScript-style rule system
+    Wrote a compact rule storage and application routine so I can
+    define rule patterns and results (Player/Enemy interactions).
+    These are my handcrafted rule-processing helpers.
+*/
 void add_rule(char *pattern, char *result){
     if(rule_count < 50){
         strcpy(game_rules[rule_count].pattern, pattern);
@@ -1177,7 +1205,10 @@ void apply_rules(){
     }
 }
 
-// Brogue-inspired Dijkstra pathfinding
+/* Module: Dijkstra pathfinding (Brogue-inspired)
+    Implemented a flood-fill/Dijkstra map and AI step based on it.
+    This is my pathfinding code to help enemies plan routes.
+*/
 void calculate_dijkstra_map(int target_x, int target_y){
     // Initialize distances
     for(int i = 0; i < GRID_SIZE; i++){
